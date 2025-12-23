@@ -1,0 +1,1493 @@
+# NEST Infrastructure Management Platform - Implementation Plan
+
+## Executive Summary
+
+Transform NEST from a basic template into a comprehensive infrastructure management platform for storage, databases, and big data clusters with **full and partial lifecycle management**, multi-tenancy, RBAC, and Kubernetes integration.
+
+### Key Capabilities
+- **Full Lifecycle**: NEST provisions, configures, monitors, and destroys resources in Kubernetes
+- **Partial Lifecycle**: NEST can register external resources and perform monitoring, user management, configuration updates, backups, and other operations without having provisioned them
+- **Multi-Tenancy**: Team-based resource organization with granular RBAC
+- **TLS Management**: Internal CA creation, certificate generation, and auto-renewal
+- **Comprehensive Monitoring**: Resource stats, performance metrics, operational risk indicators
+
+---
+
+## Resource Management Modes
+
+NEST supports two classes of resources/assets:
+
+### Class 1: Fully Managed Resources (NEST-Provisioned)
+**NEST provisions resources in Kubernetes and manages complete lifecycle:**
+- ✓ Provision (StatefulSets, Helm charts, Operators)
+- ✓ Configure (initial setup, TLS, users)
+- ✓ Monitor (stats, health, performance)
+- ✓ Update (scaling, version upgrades, configuration changes)
+- ✓ Backup/Restore (if applicable)
+- ✓ Destroy (deprovisioning)
+
+**Examples**: PostgreSQL cluster, Redis instance, Hadoop cluster deployed by NEST
+
+### Class 2: Externally Managed Resources (Partial Lifecycle)
+**NEST registers existing resources and performs available management operations:**
+- ✓ Register (manual addition with connection details)
+- ✓ Monitor (stats, health, performance via connections)
+- ✓ User Management (create/update/delete users on the resource)
+- ✓ Configuration Updates (modify settings via resource API/CLI)
+- ✓ Backup/Restore Operations (trigger/manage backups)
+- ✓ Certificate Management (rotate TLS certs if NEST-managed CA)
+- ✗ Provision (resource already exists)
+- ✗ Destroy (NEST doesn't own the resource)
+
+**Examples**: External SAN cluster, legacy database server, cloud-managed RDS instance
+
+**Note**: Externally managed resources have a sub-mode for monitoring-only when admin access is unavailable (read-only credentials).
+
+---
+
+## Architecture Design
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         NEST Platform                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌───────────────┐ │
+│  │   React WebUI    │───▶│  Go API Gateway  │───▶│   PostgreSQL  │ │
+│  │  (Port 3000)     │    │   (Port 8080)    │    │               │ │
+│  └──────────────────┘    └──────────────────┘    └───────────────┘ │
+│           │                       │                       ▲          │
+│           │                       │                       │          │
+│           │                       ▼                       │          │
+│           │              ┌──────────────────┐            │          │
+│           └─────────────▶│  Python Manager  │────────────┘          │
+│                          │   (Port 8000)    │                       │
+│                          └──────────────────┘                       │
+│                                   │                                  │
+│                                   │                                  │
+│  ┌────────────────────────────────┴─────────────────────────────┐  │
+│  │                    Worker Services Layer                       │  │
+│  │                                                                 │  │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐ │  │
+│  │  │ K8s Controller  │  │ Stats Collector │  │  CA Manager    │ │  │
+│  │  │   (Go)          │  │   (Python)      │  │  (Python)      │ │  │
+│  │  └─────────────────┘  └─────────────────┘  └────────────────┘ │  │
+│  │                                                                 │  │
+│  │  ┌─────────────────┐  ┌─────────────────┐                     │  │
+│  │  │ Backup Worker   │  │ User Sync Worker│                     │  │
+│  │  │   (Python)      │  │   (Python)      │                     │  │
+│  │  └─────────────────┘  └─────────────────┘                     │  │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                   │                                  │
+│         ┌─────────────────────────┼─────────────────────────┐       │
+│         │                         │                         │       │
+│         ▼                         ▼                         ▼       │
+│  ┌─────────────┐         ┌─────────────┐          ┌─────────────┐  │
+│  │ K8s Cluster │         │  External   │          │ External    │  │
+│  │ (Managed)   │         │  Resources  │          │ Resources   │  │
+│  │             │         │ (Partial LC)│          │ (Monitor)   │  │
+│  └─────────────┘         └─────────────┘          └─────────────┘  │
+│                                                                       │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │            Monitoring Stack (Auto-Deployed by NEST)              │ │
+│  │                                                                   │ │
+│  │    Prometheus  ◄──  Grafana  ◄──  AlertManager  ◄──  Rsyslog    │ │
+│  │    (baked-in)      (baked-in)     (baked-in)       (log fwd)    │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Database Schema Design
+
+### Core Tables
+
+```sql
+-- Teams (Organizations/Groups)
+CREATE TABLE teams (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    is_global BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+-- Insert default Global team
+INSERT INTO teams (name, description, is_global)
+VALUES ('Global', 'Default global team', TRUE);
+
+-- Users (extended)
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+-- Team Memberships with RBAC
+CREATE TABLE team_memberships (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL, -- global_admin, global_viewer, team_admin, team_maintainer, team_viewer
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, team_id)
+);
+
+-- Resource Types
+CREATE TABLE resource_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE, -- 'storage-iscsi', 'storage-nfs', 'db-mariadb', etc.
+    category VARCHAR(50) NOT NULL, -- 'storage', 'database', 'bigdata'
+    display_name VARCHAR(255) NOT NULL,
+    icon VARCHAR(100),
+    supports_full_lifecycle BOOLEAN DEFAULT TRUE,
+    supports_partial_lifecycle BOOLEAN DEFAULT TRUE,
+    supports_user_management BOOLEAN DEFAULT FALSE,
+    supports_backup BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Resources (core resource management)
+CREATE TABLE resources (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    resource_type_id INTEGER REFERENCES resource_types(id),
+    team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+
+    -- Lifecycle mode
+    lifecycle_mode VARCHAR(50) NOT NULL, -- full, partial, monitor_only
+    provisioning_method VARCHAR(50), -- k8s-statefulset, k8s-operator, helm, manual
+
+    -- Connection info (JSON)
+    connection_info JSONB, -- host, port, username, connection_string, etc.
+
+    -- Credentials (encrypted)
+    credentials JSONB, -- admin_password, api_key, etc.
+
+    -- TLS configuration
+    tls_enabled BOOLEAN DEFAULT FALSE,
+    tls_ca_id INTEGER REFERENCES certificate_authorities(id),
+    tls_cert_id INTEGER REFERENCES certificates(id),
+
+    -- Kubernetes metadata (NULL for external resources)
+    k8s_namespace VARCHAR(255),
+    k8s_resource_name VARCHAR(255),
+    k8s_resource_type VARCHAR(50),
+
+    -- Configuration (JSON for flexibility)
+    config JSONB,
+
+    -- Capabilities (what NEST can do with this resource)
+    can_modify_users BOOLEAN DEFAULT FALSE,
+    can_modify_config BOOLEAN DEFAULT FALSE,
+    can_backup BOOLEAN DEFAULT FALSE,
+    can_scale BOOLEAN DEFAULT FALSE,
+
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+-- Resource Users (for user management on resources)
+CREATE TABLE resource_users (
+    id SERIAL PRIMARY KEY,
+    resource_id INTEGER REFERENCES resources(id) ON DELETE CASCADE,
+    username VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255), -- if NEST manages password
+    roles JSONB, -- resource-specific roles
+
+    -- Sync status
+    sync_status VARCHAR(50) DEFAULT 'pending', -- pending, synced, failed
+    last_synced_at TIMESTAMP,
+    sync_error TEXT,
+
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP,
+
+    UNIQUE(resource_id, username)
+);
+
+-- Certificate Authorities
+CREATE TABLE certificate_authorities (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- root, intermediate
+
+    -- CA certificate and key (encrypted)
+    certificate TEXT NOT NULL,
+    private_key TEXT, -- NULL if uploaded without key
+
+    -- Metadata
+    subject VARCHAR(500),
+    issuer VARCHAR(500),
+    valid_from TIMESTAMP,
+    valid_until TIMESTAMP,
+    serial_number VARCHAR(255),
+
+    -- Usage tracking
+    is_nest_managed BOOLEAN DEFAULT TRUE,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+-- TLS Certificates
+CREATE TABLE certificates (
+    id SERIAL PRIMARY KEY,
+    resource_id INTEGER REFERENCES resources(id) ON DELETE CASCADE,
+    ca_id INTEGER REFERENCES certificate_authorities(id),
+
+    -- Certificate data (encrypted)
+    certificate TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+
+    -- Certificate details
+    common_name VARCHAR(255) NOT NULL,
+    san_dns JSONB,
+    san_ips JSONB,
+
+    valid_from TIMESTAMP,
+    valid_until TIMESTAMP,
+    serial_number VARCHAR(255),
+
+    -- Auto-renewal
+    auto_renew BOOLEAN DEFAULT TRUE,
+    renewal_threshold_days INTEGER DEFAULT 30,
+
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+-- Resource Statistics (time-series data)
+CREATE TABLE resource_stats (
+    id SERIAL PRIMARY KEY,
+    resource_id INTEGER REFERENCES resources(id) ON DELETE CASCADE,
+    timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    -- Generic metrics (JSONB for flexibility)
+    metrics JSONB NOT NULL,
+
+    -- Operational risk indicators
+    risk_level VARCHAR(20), -- low, medium, high, critical
+    risk_factors JSONB,
+
+    INDEX idx_resource_timestamp (resource_id, timestamp DESC)
+);
+
+-- Backup Jobs
+CREATE TABLE backup_jobs (
+    id SERIAL PRIMARY KEY,
+    resource_id INTEGER REFERENCES resources(id) ON DELETE CASCADE,
+    job_type VARCHAR(50) NOT NULL, -- full, incremental, differential
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+
+    backup_location TEXT, -- S3 URL, local path, etc.
+    backup_size_bytes BIGINT,
+
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+
+    error_message TEXT,
+
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Provisioning Jobs
+CREATE TABLE provisioning_jobs (
+    id SERIAL PRIMARY KEY,
+    resource_id INTEGER REFERENCES resources(id) ON DELETE CASCADE,
+    job_type VARCHAR(50) NOT NULL, -- provision, deprovision, update, scale, backup, user_sync
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+
+    logs TEXT,
+    error_message TEXT,
+
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Audit Log
+CREATE TABLE audit_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    action VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(100),
+    resource_id INTEGER,
+    team_id INTEGER REFERENCES teams(id),
+
+    details JSONB,
+    ip_address INET,
+    user_agent TEXT,
+
+    timestamp TIMESTAMP DEFAULT NOW(),
+    INDEX idx_audit_timestamp (timestamp DESC)
+);
+```
+
+---
+
+## Service Breakdown
+
+### 1. Go API Gateway (apps/api)
+
+**Enhanced with full RBAC and resource management**
+
+**New Endpoints**:
+```
+# Authentication
+POST   /api/v1/auth/login
+POST   /api/v1/auth/logout
+GET    /api/v1/auth/me
+
+# Teams
+GET    /api/v1/teams
+POST   /api/v1/teams
+GET    /api/v1/teams/:id
+PUT    /api/v1/teams/:id
+DELETE /api/v1/teams/:id
+GET    /api/v1/teams/:id/members
+POST   /api/v1/teams/:id/members
+DELETE /api/v1/teams/:id/members/:user_id
+
+# Resources
+GET    /api/v1/resources
+POST   /api/v1/resources
+GET    /api/v1/resources/:id
+PUT    /api/v1/resources/:id
+DELETE /api/v1/resources/:id
+GET    /api/v1/resources/:id/stats
+GET    /api/v1/resources/:id/connection-info
+
+# Resource Users (for partial lifecycle)
+GET    /api/v1/resources/:id/users
+POST   /api/v1/resources/:id/users
+PUT    /api/v1/resources/:id/users/:username
+DELETE /api/v1/resources/:id/users/:username
+POST   /api/v1/resources/:id/users/:username/sync
+
+# Resource Operations (for partial lifecycle)
+POST   /api/v1/resources/:id/backup
+POST   /api/v1/resources/:id/restore
+PUT    /api/v1/resources/:id/config
+POST   /api/v1/resources/:id/scale
+
+# Certificate Authorities
+GET    /api/v1/ca
+POST   /api/v1/ca
+GET    /api/v1/ca/:id
+GET    /api/v1/ca/:id/public-key
+```
+
+### 2. Python Manager (apps/manager - NEW)
+
+**Core orchestration service using Quart**
+
+**Tech Stack**:
+- Quart (async Flask) per requirements
+- Flask-Security-Too + SQLAlchemy for db-init only
+- PyDAL for migrations and normal DB operations
+- kubernetes Python client
+- python-helm for Helm charts
+- cryptography for TLS
+- paramiko/fabric for SSH operations on external resources
+
+**Key Modules**:
+```
+apps/manager/
+├── app.py                      # Quart app
+├── db_init.py                 # Flask-Security-Too + SQLAlchemy initialization
+├── models/                    # PyDAL models
+│   ├── __init__.py
+│   ├── teams.py
+│   ├── resources.py
+│   └── certificates.py
+├── controllers/
+│   ├── resources.py           # Resource CRUD
+│   ├── provisioning.py        # Full lifecycle provisioning
+│   ├── external_ops.py        # Partial lifecycle operations (NEW)
+│   ├── kubernetes.py          # K8s operations
+│   ├── certificates.py        # TLS management
+│   └── backup.py              # Backup operations (NEW)
+├── workers/
+│   ├── k8s_controller.py      # K8s reconciliation
+│   ├── stats_collector.py     # Metrics collection
+│   ├── cert_rotation.py       # Auto-renewal
+│   ├── backup_scheduler.py    # Backup automation (NEW)
+│   └── user_sync.py           # Resource user synchronization (NEW)
+├── lib/
+│   ├── k8s_client.py
+│   ├── helm_client.py
+│   ├── ca_manager.py
+│   ├── resource_connectors/   # Connectors for external resources (NEW)
+│   │   ├── postgresql.py      # PostgreSQL user management, config
+│   │   ├── mariadb.py
+│   │   ├── redis.py
+│   │   ├── ceph.py            # Ceph cluster management via API
+│   │   ├── san.py             # SAN management via vendor APIs
+│   │   └── hadoop.py
+│   └── backup_backends/       # Backup integrations (NEW)
+│       ├── s3.py
+│       ├── local.py
+│       └── nfs.py
+└── templates/                 # K8s YAML templates
+    ├── statefulset/
+    ├── deployments/
+    └── secrets/
+```
+
+**External Resource Operations**:
+
+NEST will include resource-specific connectors for partial lifecycle management:
+
+```python
+# Example: PostgreSQL connector for external instances
+class PostgreSQLConnector:
+    def __init__(self, connection_info, credentials):
+        self.host = connection_info['host']
+        self.port = connection_info['port']
+        self.admin_user = credentials['admin_user']
+        self.admin_password = decrypt(credentials['admin_password'])
+
+    def create_user(self, username, password, roles):
+        """Create user on external PostgreSQL"""
+        conn = psycopg2.connect(...)
+        cursor = conn.cursor()
+        cursor.execute(f"CREATE USER {username} WITH PASSWORD %s", (password,))
+        for role in roles:
+            cursor.execute(f"GRANT {role} TO {username}")
+        conn.commit()
+
+    def update_config(self, config_params):
+        """Update PostgreSQL configuration"""
+        conn = psycopg2.connect(...)
+        for key, value in config_params.items():
+            cursor.execute(f"ALTER SYSTEM SET {key} = %s", (value,))
+        conn.commit()
+
+    def trigger_backup(self, backup_location):
+        """Trigger pg_dump backup"""
+        subprocess.run([
+            'pg_dump', '-h', self.host, '-U', self.admin_user,
+            '-F', 'c', '-f', backup_location
+        ])
+
+    def collect_stats(self):
+        """Collect database statistics"""
+        conn = psycopg2.connect(...)
+        stats = {
+            'connections': get_active_connections(conn),
+            'database_size': get_database_size(conn),
+            'queries_per_second': get_qps(conn),
+            'cache_hit_ratio': get_cache_hit_ratio(conn)
+        }
+        return stats
+```
+
+### 3. User Sync Worker (Python - NEW)
+
+**Purpose**: Synchronize NEST user definitions to actual resources
+
+**Responsibilities**:
+- Watch resource_users table for changes
+- Connect to resources (k8s-managed or external)
+- Create/update/delete users on resources
+- Handle resource-specific user management APIs
+- Update sync status
+
+**Flow**:
+```
+User creates resource user in NEST UI
+    ↓
+API stores in resource_users table (status: pending)
+    ↓
+User Sync Worker detects new user
+    ↓
+Worker determines resource type
+    ↓
+Worker uses appropriate connector:
+    ├── PostgreSQL: CREATE USER via psycopg2
+    ├── MariaDB: CREATE USER via mysql-connector
+    ├── Redis: ACL SETUSER via redis-py
+    ├── Ceph: ceph auth add via ceph API
+    └── SAN: vendor-specific API call
+    ↓
+Update resource_users status: synced
+    ↓
+On failure: Update status: failed, log error
+```
+
+### 4. Backup Worker (Python - NEW)
+
+**Purpose**: Handle backup operations for resources
+
+**Responsibilities**:
+- Schedule automated backups
+- Trigger on-demand backups
+- Support multiple backup backends (S3, NFS, local)
+- Handle resource-specific backup commands
+- Track backup jobs and retention
+
+**Backup Methods by Resource Type**:
+```
+PostgreSQL:     pg_dump / pg_basebackup
+MariaDB:        mysqldump / Percona XtraBackup
+Redis:          SAVE / BGSAVE
+Ceph:           rbd snapshot
+SAN:            vendor snapshot API
+Hadoop HDFS:    hadoop distcp
+SQLite:         file copy with WAL
+```
+
+---
+
+## Resource Provisioning & Management Workflows
+
+### Workflow 1: Full Lifecycle (NEST Provisions in K8s)
+
+```
+1. User creates resource via wizard
+   └─ Selects: PostgreSQL, Team: DataTeam, TLS: Enabled
+
+2. API creates resource record (lifecycle_mode: full, status: pending)
+
+3. Python Manager provisions:
+   ├─ Generate TLS certificate (if enabled)
+   ├─ Create k8s Secret with credentials + TLS
+   ├─ Generate StatefulSet manifest
+   ├─ Apply to Kubernetes (namespace: datateam)
+   └─ Update status: provisioning
+
+4. K8s Controller watches StatefulSet:
+   └─ Pod becomes Running → Update status: running
+   └─ Extract connection info (ClusterIP, NodePort)
+   └─ Update connection_info in database
+
+5. Stats Collector starts monitoring:
+   └─ Query k8s Metrics API every 60s
+   └─ Store in resource_stats table
+
+6. Resource is ready:
+   └─ User sees connection info on dashboard
+   └─ Can create resource users
+   └─ Can trigger backups
+```
+
+### Workflow 2: Partial Lifecycle (External Resource)
+
+```
+1. User registers external SAN cluster
+   └─ Name: "Legacy SAN-01"
+   └─ Type: storage-san
+   └─ Lifecycle: Partial
+   └─ Connection: {"host": "san.corp.local", "api_port": 8443}
+   └─ Credentials: {"admin_user": "admin", "admin_password": "***"}
+   └─ Capabilities: Monitor ✓, User Management ✓, Backup ✓
+
+2. API creates resource record:
+   └─ lifecycle_mode: partial
+   └─ provisioning_method: manual
+   └─ can_modify_users: true
+   └─ can_backup: true
+   └─ status: running (already exists)
+
+3. Stats Collector connects to SAN:
+   └─ Uses SAN connector with credentials
+   └─ Queries vendor API for metrics:
+      ├─ Storage capacity / used
+      ├─ IOPS
+      ├─ Volume count
+      └─ Health status
+   └─ Stores in resource_stats
+
+4. User creates resource user:
+   └─ Username: "backup_user"
+   └─ Access: Read-only volume access
+
+5. User Sync Worker:
+   └─ Calls SAN API: create_user("backup_user", permissions)
+   └─ Updates resource_users.sync_status: synced
+
+6. User triggers backup:
+   └─ NEST calls SAN snapshot API
+   └─ Creates backup_jobs record
+   └─ Exports snapshot to S3
+```
+
+### Workflow 3: Monitor Only (External RDS)
+
+```
+1. User registers AWS RDS instance
+   └─ Name: "Production RDS"
+   └─ Type: db-postgresql
+   └─ Lifecycle: Monitor Only
+   └─ Connection: {"endpoint": "prod.rds.amazonaws.com", "port": 5432}
+   └─ Credentials: {"username": "readonly", "password": "***"}
+   └─ Capabilities: Monitor ✓
+
+2. API creates resource record:
+   └─ lifecycle_mode: monitor_only
+   └─ can_modify_users: false
+   └─ can_backup: false
+
+3. Stats Collector:
+   └─ Connects via PostgreSQL connector (read-only)
+   └─ Queries: SELECT * FROM pg_stat_database
+   └─ Stores metrics
+
+4. User sees dashboard:
+   └─ Connection info displayed
+   └─ Stats/charts visible
+   └─ No management actions available (read-only)
+```
+
+---
+
+## RBAC Implementation
+
+### Role Definitions
+
+| Role | Scope | Permissions |
+|------|-------|-------------|
+| **Global Admin** | All teams | Full system access, create teams, manage all resources |
+| **Global Viewer** | All teams | Read-only access to all teams and resources |
+| **Team Admin** | Single team | Full control of team resources, manage team members |
+| **Team Maintainer** | Single team | Create/update/delete resources, NO member management |
+| **Team Viewer** | Single team | Read-only access to team resources |
+
+### Permission Enforcement
+
+**Go API Middleware**:
+```go
+func RBACMiddleware(action string) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        user := c.MustGet("user").(User)
+        resourceID := c.Param("resource_id")
+
+        // Check permission
+        allowed := checkPermission(user, action, resourceID)
+        if !allowed {
+            c.JSON(403, gin.H{"error": "forbidden"})
+            c.Abort()
+            return
+        }
+        c.Next()
+    }
+}
+
+// Usage
+router.DELETE("/api/v1/resources/:id",
+    AuthMiddleware(),
+    RBACMiddleware("delete_resource"),
+    DeleteResource)
+```
+
+**Database Query Scoping**:
+```go
+func ListResources(userID uint) []Resource {
+    user := GetUserWithMemberships(userID)
+
+    if user.IsGlobalAdmin() || user.IsGlobalViewer() {
+        return db.Find(&Resource{}).All()
+    }
+
+    // Team-scoped
+    teamIDs := user.GetTeamIDs()
+    return db.Where("team_id IN ?", teamIDs).Find(&Resource{}).All()
+}
+```
+
+---
+
+## TLS/CA Management
+
+### CA Operations
+
+**1. Create Internal CA** (Global Admin only):
+- NEST generates RSA 4096-bit key pair
+- Creates self-signed root CA certificate
+- Stores encrypted in database
+- Validity: 10 years
+
+**2. Upload CA** (Global Admin only):
+- Upload CA certificate (required)
+- Upload CA private key (optional - needed for cert generation)
+- Specify type: ROOT or Intermediate
+- NEST validates certificate chain
+
+**3. Generate Resource Certificate**:
+- For resource with TLS enabled
+- NEST uses selected CA
+- Generates resource private key (RSA 2048-bit)
+- Creates certificate with SANs:
+  - DNS: resource-name
+  - DNS: resource-name.namespace.svc.cluster.local (if k8s)
+  - IP: LoadBalancer IP (if applicable)
+- Validity: 1 year (auto-renew at 30 days remaining)
+
+**4. Certificate Rotation Worker**:
+- Runs daily
+- Checks certificates expiring within threshold
+- Auto-generates new certificate
+- Updates k8s Secret (for k8s resources)
+- Calls resource API to reload cert (for external resources)
+
+---
+
+## Monitoring & Stats Architecture
+
+### Baked-In Monitoring Stack
+
+**NEST automatically deploys and configures:**
+1. **Prometheus** - Metrics collection and storage (auto-configured)
+2. **Grafana** - Dashboards and visualization (pre-configured dashboards)
+3. **AlertManager** - Alert routing and management (integrated with NEST notifications)
+4. **Rsyslog** - Log forwarding to external syslog servers
+
+**Deployment**:
+- NEST deploys monitoring stack as part of its own infrastructure
+- Users don't need to configure Prometheus/Grafana separately
+- Pre-configured dashboards for all resource types
+- Alert rules auto-generated based on resource risk thresholds
+- Rsyslog configured for log aggregation and forwarding
+
+### Stats Collection Process
+
+**For K8s Resources**:
+1. Query Kubernetes Metrics API (metrics.k8s.io)
+2. Get pod metrics: CPU, memory, network
+3. Query resource directly for app-specific metrics
+4. Calculate risk indicators
+5. Store in resource_stats table
+6. Update Prometheus gauges
+
+**For External Resources**:
+1. Connect via resource connector
+2. Query resource-specific metrics:
+   - PostgreSQL: pg_stat_database, pg_stat_activity
+   - MariaDB: SHOW STATUS, information_schema
+   - SAN: Vendor API metrics
+   - Ceph: ceph status, ceph df
+3. Calculate risk indicators
+4. Store in resource_stats
+5. Update Prometheus gauges
+
+### Risk Indicators
+
+```python
+def calculate_risk(metrics, resource_type):
+    risk_level = "low"
+    risk_factors = []
+
+    # Disk usage risk
+    if 'disk_usage_percent' in metrics:
+        if metrics['disk_usage_percent'] > 95:
+            risk_level = "critical"
+            risk_factors.append("Disk usage critical (>95%)")
+        elif metrics['disk_usage_percent'] > 85:
+            risk_level = "high"
+            risk_factors.append("Disk usage high (>85%)")
+
+    # Memory pressure
+    if 'memory_usage_percent' in metrics:
+        if metrics['memory_usage_percent'] > 90:
+            risk_level = max_risk(risk_level, "high")
+            risk_factors.append("Memory pressure high")
+
+    # Connection saturation (databases)
+    if 'connection_usage_percent' in metrics:
+        if metrics['connection_usage_percent'] > 80:
+            risk_level = max_risk(risk_level, "medium")
+            risk_factors.append("Connection pool saturated")
+
+    return risk_level, risk_factors
+```
+
+### Prometheus Metrics
+
+```python
+# Resource counts
+nest_resources_total = Gauge('nest_resources_total',
+    'Total resources', ['type', 'status', 'team', 'lifecycle_mode'])
+
+# Resource health
+nest_resource_cpu_percent = Gauge('nest_resource_cpu_percent',
+    'CPU usage', ['resource_id', 'resource_name'])
+nest_resource_memory_bytes = Gauge('nest_resource_memory_bytes',
+    'Memory usage', ['resource_id', 'resource_name'])
+nest_resource_disk_usage_percent = Gauge('nest_resource_disk_usage_percent',
+    'Disk usage percentage', ['resource_id', 'resource_name'])
+nest_resource_risk_level = Gauge('nest_resource_risk_level',
+    'Risk level (0=low, 1=medium, 2=high, 3=critical)', ['resource_id'])
+
+# Backup metrics
+nest_backup_jobs_total = Counter('nest_backup_jobs_total',
+    'Total backup jobs', ['resource_id', 'status'])
+nest_backup_duration_seconds = Histogram('nest_backup_duration_seconds',
+    'Backup duration', ['resource_id'])
+```
+
+---
+
+## React Frontend Architecture
+
+### Component Structure
+
+```
+web/src/
+├── components/
+│   ├── auth/
+│   │   ├── LoginForm.tsx
+│   │   ├── ProtectedRoute.tsx
+│   │   └── RoleGuard.tsx              # RBAC component
+│   ├── layout/
+│   │   ├── AppLayout.tsx
+│   │   ├── Sidebar.tsx
+│   │   ├── Header.tsx
+│   │   └── TeamSwitcher.tsx           # Switch between teams
+│   ├── resources/
+│   │   ├── ResourceList.tsx           # Tabbed by type with color coding
+│   │   ├── ResourceCard.tsx           # Color-coded borders and badges
+│   │   ├── ResourceDetails.tsx        # Color-coded header
+│   │   ├── ResourceWizard.tsx         # Multi-step creation with visual mode selection
+│   │   ├── ConnectionInfo.tsx         # Connection details
+│   │   ├── ResourceUsers.tsx          # User management (NEW)
+│   │   ├── ResourceBackups.tsx        # Backup management (NEW)
+│   │   ├── LifecycleBadge.tsx         # Color-coded badge: Blue/Orange/Gray (NEW)
+│   │   ├── LifecycleIcon.tsx          # Icon with colored background (NEW)
+│   │   └── CapabilityIndicators.tsx   # Shows what NEST can do with resource (NEW)
+│   ├── teams/
+│   │   ├── TeamList.tsx
+│   │   ├── TeamMembers.tsx
+│   │   └── RoleSelector.tsx
+│   ├── certificates/
+│   │   ├── CAManagement.tsx
+│   │   ├── CertificateList.tsx
+│   │   └── TLSConfigForm.tsx
+│   └── stats/
+│       ├── ResourceStats.tsx
+│       ├── MetricsChart.tsx
+│       ├── RiskIndicator.tsx
+│       └── UsageTrends.tsx
+├── pages/
+│   ├── Dashboard.tsx                  # Team dashboard with tabs
+│   ├── Resources.tsx
+│   ├── Teams.tsx
+│   ├── Backups.tsx                    # Backup management (NEW)
+│   ├── Settings.tsx
+│   └── Admin.tsx
+├── services/
+│   ├── api.ts
+│   ├── auth.ts
+│   ├── resources.ts
+│   ├── teams.ts
+│   ├── certificates.ts
+│   ├── backups.ts                     # Backup API calls (NEW)
+│   └── users.ts                       # Resource user API (NEW)
+├── stores/
+│   ├── authStore.ts
+│   ├── resourceStore.ts
+│   ├── teamStore.ts
+│   └── uiStore.ts
+└── types/
+    ├── resource.ts                    # Include LifecycleMode enum
+    ├── team.ts
+    ├── certificate.ts
+    ├── backup.ts                      # Backup types (NEW)
+    ├── theme.ts                       # Color scheme for lifecycle modes (NEW)
+    └── api.ts
+
+└── theme/
+    └── lifecycleColors.ts             # Centralized color definitions (NEW)
+```
+
+**Theme Configuration** (`theme/lifecycleColors.ts`):
+```typescript
+export const lifecycleColors = {
+  full: {
+    primary: '#1976d2',      // Blue
+    light: '#e3f2fd',
+    background: '#bbdefb',
+    icon: 'CloudQueue',
+    label: 'Fully Managed'
+  },
+  partial: {
+    primary: '#f57c00',      // Orange
+    light: '#fff3e0',
+    background: '#ffe0b2',
+    icon: 'Link',
+    label: 'Externally Managed'
+  },
+  monitor_only: {
+    primary: '#757575',      // Gray
+    light: '#f5f5f5',
+    background: '#e0e0e0',
+    icon: 'Visibility',
+    label: 'Monitor Only'
+  }
+};
+```
+
+### Resource Wizard Steps
+
+**Step 1: Provisioning Mode**
+- Full Lifecycle (NEST provisions in Kubernetes)
+- Partial Lifecycle (External resource, NEST manages)
+- Monitor Only (External resource, read-only)
+
+**Step 2: Resource Type**
+- Storage: iSCSI, NFS, SCSI, SAS, SAN, Ceph
+- Database: MariaDB, Galera, PostgreSQL, Redis, Valkey, SQLite
+- Big Data: Hadoop, Trino
+
+**Step 3: Basic Info**
+- Name
+- Team assignment
+- Description
+
+**Step 4: Configuration** (varies by type and mode)
+- **Full Lifecycle**: Replicas, storage size, version
+- **Partial/Monitor**: Connection details, credentials
+
+**Step 5: Capabilities** (for Partial/Monitor modes)
+- Can modify users?
+- Can modify configuration?
+- Can trigger backups?
+- Can scale?
+
+**Step 6: TLS Configuration**
+- Enable TLS
+- Select CA (or create new)
+- Auto-generate certificate
+
+**Step 7: Review & Create**
+
+### Visual Distinction for Resource Types
+
+**CRITICAL UX REQUIREMENT**: The webui must make it immediately obvious whether resources are fully managed vs externally managed.
+
+**Color Coding Scheme:**
+- **Fully Managed Resources**: Blue accent color
+  - Primary: `#1976d2` (Material-UI blue)
+  - Background: `#e3f2fd` (light blue)
+  - Icon background: Blue gradient
+
+- **Externally Managed Resources**: Orange/amber accent color
+  - Primary: `#f57c00` (Material-UI orange)
+  - Background: `#fff3e0` (light orange)
+  - Icon background: Orange gradient
+
+- **Monitor-Only Resources**: Gray accent color
+  - Primary: `#757575` (Material-UI gray)
+  - Background: `#f5f5f5` (light gray)
+  - Icon background: Gray gradient
+
+**Visual Indicators:**
+
+1. **Resource Cards**:
+   ```tsx
+   <ResourceCard>
+     <LifecycleBadge mode="full" />      // Blue badge "Fully Managed"
+     <ResourceIcon color="blue" />        // Blue icon background
+     <StatusIndicator border="blue" />   // Blue left border
+   </ResourceCard>
+   ```
+
+2. **List View**:
+   - Left border color-coded stripe (4px wide)
+   - Lifecycle badge clearly visible
+   - Icon with colored background circle
+
+3. **Detail View**:
+   - Header with colored accent bar
+   - Large lifecycle badge at top
+   - Color-coded capability indicators
+
+4. **Icons**:
+   - **Fully Managed**: `<Cloud />` icon (managed in cloud/k8s)
+   - **Externally Managed**: `<Link />` icon (linked external resource)
+   - **Monitor-Only**: `<Visibility />` icon (read-only monitoring)
+
+5. **Tooltips**:
+   - Hover over badge/icon shows full explanation
+   - "Fully Managed: Provisioned and managed by NEST in Kubernetes"
+   - "Externally Managed: External resource with partial lifecycle management"
+   - "Monitor Only: External resource with read-only monitoring"
+
+**Resource Wizard Visual Flow:**
+```
+Step 1: Provisioning Mode Selection
+┌─────────────────────────────────────────────────────────────┐
+│  SELECT RESOURCE MANAGEMENT MODE                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐│
+│  │ 🔵 FULL        │  │ 🟠 EXTERNAL    │  │ ⚪ MONITOR     ││
+│  │ Fully Managed  │  │ Externally Mgd │  │ Monitor Only   ││
+│  │                │  │                │  │                ││
+│  │ NEST provisions│  │ Existing       │  │ Read-only      ││
+│  │ and manages    │  │ resource +     │  │ monitoring     ││
+│  │ in Kubernetes  │  │ management     │  │ only           ││
+│  │                │  │                │  │                ││
+│  │ [RECOMMENDED]  │  │ [LEGACY INFRA] │  │ [SHARED/3RD]   ││
+│  └────────────────┘  └────────────────┘  └────────────────┘│
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Capability Indicators** (in detail view):
+```tsx
+<CapabilityGrid>
+  <Capability enabled color="blue">
+    <Check /> Provision & Destroy
+  </Capability>
+  <Capability enabled={canModifyUsers} color={lifecycleColor}>
+    {canModifyUsers ? <Check /> : <Close />} User Management
+  </Capability>
+  <Capability enabled={canBackup} color={lifecycleColor}>
+    {canBackup ? <Check /> : <Close />} Backups
+  </Capability>
+</CapabilityGrid>
+```
+
+### Dashboard Tabs
+
+**Storage Tab**:
+- List of storage resources (iSCSI, NFS, SAN, Ceph)
+- Color-coded cards showing lifecycle mode
+- Capacity metrics
+- IOPS graphs
+- Connection instructions
+
+**Databases Tab**:
+- List of database resources with lifecycle badges
+- Color-coded left border on each card
+- Connection count graphs
+- Query performance metrics
+- User management buttons (only for resources with capability)
+
+**Big Data Tab**:
+- Hadoop clusters (with lifecycle indicators)
+- Trino clusters (with lifecycle indicators)
+- Worker status
+- Job statistics
+
+---
+
+## Migration Strategy & Implementation Phases
+
+### Phase 1: Foundation (Weeks 1-2)
+
+**Database Schema**:
+- [ ] Create all tables
+- [ ] Seed resource_types
+- [ ] Create default Global team
+- [ ] Migration scripts (PyDAL)
+
+**Go API**:
+- [ ] JWT authentication
+- [ ] RBAC middleware
+- [ ] Team endpoints
+- [ ] Resource CRUD (basic)
+
+**Python Manager**:
+- [ ] Quart app setup
+- [ ] Flask-Security-Too db-init
+- [ ] PyDAL models
+- [ ] Health endpoint
+
+**Monitoring Stack Deployment**:
+- [ ] Deploy Prometheus to k8s (Helm chart)
+- [ ] Deploy Grafana to k8s (Helm chart)
+- [ ] Deploy AlertManager to k8s (Helm chart)
+- [ ] Configure Prometheus to scrape NEST services
+- [ ] Configure rsyslog for log forwarding
+- [ ] Create initial Grafana datasource (Prometheus)
+
+**Files**:
+- `/home/penguin/code/Nest/shared/database/postgres.go` - GORM models
+- `/home/penguin/code/Nest/apps/api/main.go` - Enhanced API
+- `/home/penguin/code/Nest/apps/api/middleware/auth.go` - JWT (NEW)
+- `/home/penguin/code/Nest/apps/api/middleware/rbac.go` - RBAC (NEW)
+- `/home/penguin/code/Nest/apps/manager/app.py` - Quart app (NEW)
+- `/home/penguin/code/Nest/apps/manager/db_init.py` - SQLAlchemy init (NEW)
+
+### Phase 2: Kubernetes Integration (Weeks 3-4)
+
+**K8s Client**:
+- [ ] Python kubernetes client
+- [ ] K8s authentication
+- [ ] Namespace management
+
+**Fully Managed Resource Provisioning**:
+- [ ] StatefulSet for PostgreSQL
+- [ ] StatefulSet for Redis
+- [ ] K8s Controller worker (Go)
+
+**Files**:
+- `/home/penguin/code/Nest/apps/manager/lib/k8s_client.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/controllers/provisioning.py` (NEW)
+- `/home/penguin/code/Nest/services/k8s-controller/main.go` (NEW)
+
+### Phase 3: Externally Managed Resource Support (Week 5)
+
+**Resource Connectors**:
+- [ ] PostgreSQL connector (user mgmt, config, stats)
+- [ ] MariaDB connector
+- [ ] Redis connector
+- [ ] Ceph connector
+- [ ] SAN connector (vendor API)
+
+**User Sync Worker**:
+- [ ] Watch resource_users table
+- [ ] Sync to resources
+- [ ] Handle failures
+
+**Files**:
+- `/home/penguin/code/Nest/apps/manager/lib/resource_connectors/postgresql.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/lib/resource_connectors/mariadb.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/lib/resource_connectors/ceph.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/lib/resource_connectors/san.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/workers/user_sync.py` (NEW)
+
+### Phase 4: TLS/CA Management (Week 6)
+
+**CA Infrastructure**:
+- [ ] CA creation
+- [ ] CA upload
+- [ ] Certificate generation
+- [ ] K8s Secret creation
+- [ ] Auto-renewal worker
+
+**Files**:
+- `/home/penguin/code/Nest/apps/manager/lib/ca_manager.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/controllers/certificates.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/workers/cert_rotation.py` (NEW)
+
+### Phase 5: Backup System (Week 7)
+
+**Backup Infrastructure**:
+- [ ] Backup job scheduler
+- [ ] S3 backend
+- [ ] NFS backend
+- [ ] Resource-specific backup commands
+- [ ] Retention policies
+
+**Files**:
+- `/home/penguin/code/Nest/apps/manager/lib/backup_backends/s3.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/lib/backup_backends/nfs.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/controllers/backup.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/workers/backup_scheduler.py` (NEW)
+
+### Phase 6: Storage & Big Data (Weeks 8-9)
+
+**Storage**:
+- [ ] NFS provisioning
+- [ ] iSCSI target
+- [ ] Ceph cluster (Rook)
+- [ ] SAN registration & management
+
+**Big Data**:
+- [ ] Helm integration
+- [ ] Hadoop deployment
+- [ ] Trino deployment
+
+**Files**:
+- `/home/penguin/code/Nest/apps/manager/lib/helm_client.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/controllers/storage.py` (NEW)
+- `/home/penguin/code/Nest/apps/manager/controllers/bigdata.py` (NEW)
+
+### Phase 7: Monitoring & Stats (Week 10)
+
+**Stats Collection**:
+- [ ] K8s Metrics API integration
+- [ ] External resource stats collection
+- [ ] Risk calculation
+- [ ] Prometheus metrics export
+
+**Grafana & Alerting**:
+- [ ] Pre-configured dashboards per resource type
+- [ ] Alert rules for risk thresholds
+- [ ] AlertManager integration
+- [ ] Notification channels (email, Slack, PagerDuty)
+
+**Rsyslog Integration**:
+- [ ] Configure rsyslog for NEST service logs
+- [ ] Forward to external syslog servers
+- [ ] Support UDP/TCP/TLS syslog
+- [ ] Structured logging format
+
+**Files**:
+- `/home/penguin/code/Nest/apps/manager/workers/stats_collector.py` (NEW)
+- `/home/penguin/code/Nest/apps/api/controllers/stats.go` (NEW)
+- `/home/penguin/code/Nest/infrastructure/monitoring/dashboards/nest-resources.json` (NEW)
+
+### Phase 8: React Frontend (Weeks 11-13)
+
+**Core UI**:
+- [ ] Auth & layout
+- [ ] Resource wizard (fully managed vs externally managed)
+- [ ] Resource list with tabs
+- [ ] Connection info display
+
+**Advanced Features**:
+- [ ] Resource user management
+- [ ] Backup management UI
+- [ ] Stats dashboards (embedded Grafana)
+- [ ] CA/TLS management
+- [ ] Alert configuration UI
+
+**Files**: All in `/home/penguin/code/Nest/web/src/`
+
+### Phase 9: Testing & Documentation (Week 14)
+
+**Testing**:
+- [ ] Unit tests
+- [ ] Integration tests
+- [ ] E2E tests
+
+**Documentation**:
+- [ ] User guide
+- [ ] Admin guide
+- [ ] API docs
+- [ ] Monitoring & alerting guide
+- [ ] Rsyslog configuration guide
+
+---
+
+## Technology Stack
+
+### Backend
+
+**Go (API Gateway)**:
+- Gin framework
+- JWT-go
+- GORM
+- client-go (Kubernetes)
+
+**Python (Manager)**:
+- Quart (async Flask) - per requirements
+- Flask-Security-Too - for db-init only
+- SQLAlchemy - for db-init only
+- PyDAL - for migrations and normal DB ops
+- kubernetes Python client
+- python-helm
+- cryptography
+- psycopg2 (PostgreSQL connector)
+- mysql-connector-python (MariaDB connector)
+- redis-py (Redis connector)
+- ceph-deploy (Ceph operations)
+- paramiko/fabric (SSH for external resources)
+- boto3 (S3 backups)
+- python-rsyslog (log forwarding)
+
+### Frontend
+
+**React Stack**:
+- React 18 + TypeScript
+- Vite
+- Material-UI (MUI)
+- React Router v6
+- Zustand (state)
+- React Query (server state)
+- Axios
+
+### Infrastructure
+
+**Orchestration**:
+- Kubernetes (existing cluster assumed)
+- Helm 3
+- Rook-Ceph operator (for Ceph)
+
+**Monitoring (Auto-Deployed by NEST)**:
+- Prometheus (metrics collection)
+- Grafana (visualization, pre-configured dashboards)
+- AlertManager (alerting, integrated notifications)
+- Rsyslog (log forwarding to external servers)
+
+---
+
+## Critical Success Factors
+
+1. **Solid RBAC foundation** - Get team/permission model right from start
+2. **Resource connectors** - Build robust, testable connectors for each resource type
+3. **Error handling** - Graceful failures for external resource operations
+4. **Security** - Encrypt credentials, secure CA private keys
+5. **User experience** - Clear distinction between full/partial/monitor modes
+6. **Documentation** - Document each connector's capabilities
+
+---
+
+## Risks & Mitigations
+
+**Risk 1: External Resource Diversity**
+- Mitigation: Start with common types (PostgreSQL, MariaDB), add others incrementally
+- Use adapter pattern for connectors
+
+**Risk 2: Credential Management**
+- Mitigation: Encrypt all credentials at rest, use Vault integration option
+- Never log credentials
+
+**Risk 3: Backup Reliability**
+- Mitigation: Test backup/restore procedures thoroughly
+- Implement backup verification
+
+**Risk 4: User Sync Failures**
+- Mitigation: Robust error handling, retry logic
+- Clear error messages to users
+
+---
+
+## Task Agent Model Selection Guide
+
+To optimize implementation efficiency and cost, use the following guidelines for task agent selection:
+
+### Use Haiku Model For:
+
+**Simple, Straightforward Tasks:**
+- Creating boilerplate files (models, controllers, routes)
+- Extracting sections from existing files
+- Simple CRUD endpoint implementation
+- Basic database model definitions
+- Configuration file updates
+- Simple unit test creation
+- File/directory structure creation
+- Basic React component scaffolding
+- Simple API client methods
+- Environment variable configuration
+
+**Examples:**
+- "Create PyDAL model for teams table"
+- "Add basic CRUD endpoints for resources"
+- "Create React LoginForm component"
+- "Extract PostgreSQL connector to new file"
+- "Add JWT middleware to Go API"
+
+### Use Sonnet Model For:
+
+**Complex, Multi-Step Tasks:**
+- Architecture design and planning
+- Complex reconciliation loops (K8s controller)
+- RBAC permission checking logic
+- Resource provisioning workflows
+- TLS/CA certificate generation and management
+- Multi-file refactoring
+- Complex state management
+- Integration of multiple systems
+- Error handling across multiple failure modes
+- Performance optimization requiring analysis
+- Security-critical implementations
+
+**Examples:**
+- "Implement K8s controller reconciliation loop"
+- "Design and implement RBAC middleware with team scoping"
+- "Implement CA certificate generation with SAN support"
+- "Create resource provisioning workflow with error handling"
+- "Implement user sync worker with retry logic"
+- "Build resource wizard with multi-step validation"
+
+### Phase-Specific Recommendations:
+
+**Phase 1 (Foundation):**
+- Database schema: Haiku (straightforward SQL/GORM)
+- JWT auth middleware: Haiku
+- RBAC middleware: Sonnet (complex permission logic)
+- PyDAL models: Haiku
+- Monitoring stack deployment: Haiku (Helm charts)
+
+**Phase 2 (K8s Integration):**
+- K8s client wrapper: Haiku
+- StatefulSet provisioning: Haiku
+- K8s Controller reconciliation: Sonnet (complex watch/reconcile logic)
+
+**Phase 3 (External Resources):**
+- Simple connectors (PostgreSQL, MariaDB): Haiku
+- Complex connectors (Ceph, SAN vendor APIs): Sonnet
+- User Sync Worker: Sonnet (error handling, retries)
+
+**Phase 4 (TLS/CA):**
+- CA creation/upload: Sonnet (cryptography, validation)
+- Certificate generation: Sonnet (SAN, key generation)
+- Auto-renewal worker: Sonnet (timing, rotation logic)
+
+**Phase 5 (Backup System):**
+- S3/NFS backends: Haiku
+- Backup scheduler: Sonnet (scheduling, retention)
+- Resource-specific backup: Haiku per resource type
+
+**Phase 6 (Storage & Big Data):**
+- NFS/iSCSI provisioning: Haiku
+- Ceph cluster (Rook): Sonnet (complex operator integration)
+- Helm integration: Haiku
+- Hadoop/Trino deployment: Haiku (Helm charts)
+
+**Phase 7 (Monitoring):**
+- Stats collector: Sonnet (multi-resource coordination)
+- Risk calculation: Haiku
+- Prometheus metrics: Haiku
+- Grafana dashboards: Haiku (JSON config)
+- AlertManager rules: Haiku
+- Rsyslog config: Haiku
+
+**Phase 8 (React Frontend):**
+- Simple components (cards, lists): Haiku
+- Complex components (wizard, state): Sonnet
+- Form validation: Haiku
+- API integration: Haiku
+- State management (Zustand): Sonnet
+
+**Phase 9 (Testing & Docs):**
+- Unit tests: Haiku
+- Integration tests: Sonnet
+- Documentation writing: Haiku
+
+### Cost & Performance Considerations:
+
+**Default to Haiku** unless the task requires:
+- Deep reasoning about architecture
+- Complex error handling across multiple failure modes
+- Multi-system integration
+- Security-critical cryptography
+- Complex business logic
+
+**Parallel Execution:**
+- Run multiple Haiku agents in parallel for independent tasks (max 10 concurrent)
+- Use single Sonnet agent for tasks requiring coordination
+
+---
+
+## Next Steps After Plan Approval
+
+1. Create detailed database migration scripts (PyDAL) - **Haiku**
+2. Scaffold all new services and workers - **Haiku**
+3. Implement resource connector interface - **Sonnet** (design), **Haiku** (simple connectors)
+4. Begin Phase 1 implementation
+
+---
+
+**This plan will be saved to `.PLAN-v2` file upon approval.**

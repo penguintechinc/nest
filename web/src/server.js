@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import path from 'path';
 import { createPrometheusMetrics } from './lib/metrics.js';
 import { initializeLicensing, getClient } from './lib/license-client.js';
 

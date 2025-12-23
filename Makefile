@@ -173,7 +173,7 @@ build-go: ## Build - Build Go applications
 
 build-python: ## Build - Build Python applications
 	@echo "$(BLUE)Building Python applications...$(RESET)"
-	@python -m py_compile apps/web/app.py
+	@python3 -m py_compile apps/web/app.py
 
 build-node: ## Build - Build Node.js applications
 	@echo "$(BLUE)Building Node.js applications...$(RESET)"
