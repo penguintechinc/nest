@@ -1,0 +1,255 @@
+replicas: 1
+
+image:
+  repository: grafana/grafana
+  tag: 10.2.0
+  pullPolicy: IfNotPresent
+
+# Admin credentials
+adminUser: admin
+adminPassword: admin
+# Use existing secret for credentials
+# adminExistingSecret: grafana-admin-secret
+# adminExistingSecretPasswordKey: password
+
+# LDAP configuration (optional)
+# ldap:
+#   enabled: false
+
+# OAuth configuration (optional)
+# auth:
+#   oauth:
+#     enabled: false
+#     clientId: ""
+#     clientSecret: ""
+
+# Security settings
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 472
+  fsGroup: 472
+
+# Resource requests and limits
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 3000
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  path: /
+  pathType: Prefix
+  hosts:
+    - grafana.nest.local
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  tls:
+    - secretName: grafana-tls
+      hosts:
+        - grafana.nest.local
+
+# Persistence configuration
+persistence:
+  enabled: true
+  type: pvc
+  storageClassName: fast-ssd
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  # Use existing PVC
+  # existingClaim: grafana-pvc
+
+# Environment variables
+env:
+  GF_SECURITY_ADMIN_PASSWORD: admin
+  GF_SECURITY_ADMIN_USER: admin
+  GF_USERS_ALLOW_SIGN_UP: "false"
+  GF_EXPLORE_ENABLED: "true"
+  GF_PANELS_DISABLE_SANITIZE_HTML: "false"
+  GF_INSTALL_PLUGINS: "grafana-piechart-panel,alexanderzobnin-zabbix-app,grafana-worldmap-panel"
+
+# Grafana config
+grafanaIni:
+  paths:
+    data: /var/lib/grafana/
+    logs: /var/log/grafana
+    plugins: /var/lib/grafana/plugins
+    provisioning: /etc/grafana/provisioning
+  analytics:
+    check_for_updates: true
+  log:
+    mode: console
+    level: info
+  grafana_net:
+    url: https://grafana.net
+  auth:
+    disable_login_form: false
+    oauth_auto_login: false
+  auth.basic:
+    enabled: true
+  auth.anonymous:
+    enabled: false
+  security:
+    admin_user: admin
+    admin_password: admin
+    secret_key: "SW2YcwTIb9zpOOhoPsMm"
+    session_cookie_secure: true
+    session_cookie_httponly: true
+  users:
+    allow_sign_up: false
+    auto_assign_org: true
+    auto_assign_org_role: Viewer
+  explore:
+    enabled: true
+  panels:
+    disable_sanitize_html: false
+
+# Datasources
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://kube-prometheus-stack-prometheus:9090
+        access: proxy
+        isDefault: true
+        jsonData:
+          timeInterval: 30s
+          queryTimeout: 30s
+        editable: true
+
+# Dashboard providers
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'NEST Dashboards'
+        orgId: 1
+        folder: 'NEST'
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards/nest
+
+# Pre-configured dashboards
+dashboards:
+  nest:
+    nest-overview:
+      url: https://grafana.com/api/dashboards/1860/revisions/23/download
+    nest-resources:
+      url: https://grafana.com/api/dashboards/3662/revisions/1/download
+
+# Sidecar configurations for dynamic dashboard/datasource loading
+sidecar:
+  dashboards:
+    enabled: true
+    defaultDashboardsEnabled: true
+    defaultDashboardsTimezone: utc
+    adminUser: admin
+    adminPassword: admin
+    labels:
+      grafana_dashboard: "1"
+    providers:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'NEST Dashboards'
+            orgId: 1
+            folder: 'NEST'
+            type: file
+            disableDeletion: false
+            options:
+              path: /var/lib/grafana/dashboards/nest
+
+  datasources:
+    enabled: true
+    defaultDashboardsEnabled: true
+    labels:
+      grafana_datasource: "1"
+    providers:
+      datasourceproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'Prometheus'
+            orgId: 1
+            type: file
+            disableDeletion: false
+            options:
+              path: /etc/grafana/provisioning/datasources
+
+# Rbac configuration
+rbac:
+  pspEnabled: false
+  pspUseAppArmor: true
+
+# Service account
+serviceAccount:
+  create: true
+  autoMount: true
+  name: grafana
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3000"
+  prometheus.io/path: "/metrics"
+
+# Pod labels
+podLabels:
+  app: grafana
+
+# Security context for pod
+podSecurityContext:
+  fsGroup: 472
+
+# Container security context
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 472
+
+# Affinity rules
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - grafana
+          topologyKey: kubernetes.io/hostname
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Update strategy
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1

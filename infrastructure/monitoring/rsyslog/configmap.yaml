@@ -1,0 +1,181 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rsyslog-config
+  namespace: monitoring
+data:
+  rsyslog.conf: |
+    # /etc/rsyslog.conf Configuration file for rsyslog.
+    #
+    # For more information see /usr/share/doc/rsyslog-doc/html/rsyslog_conf.html
+    # or properties of rsyslog module documentation
+
+    #### MODULES ####
+    module(load="imuxsock") # provides support for local system logging
+    module(load="imudp")    # provides UDP syslog reception
+    module(load="imtcp")    # provides TCP syslog reception
+    module(load="imklog")   # reads kernel messages
+
+    #### GLOBAL DIRECTIVES ####
+    # Sets the default permissions for all log files.
+    $FileOwner syslog
+    $FileGroup adm
+    $FileCreateMode 0640
+    $DirCreateMode 0755
+    $Umask 0022
+    $PrivDropToUser syslog
+    $PrivDropToGroup syslog
+
+    # Use a high precision timestamp format
+    $ActionFileDefaultTemplate RSYSLOG_FileFormat
+    $ActionFileEnableSync on
+
+    # Set the message format
+    $template NEST,"<%PRI%>%TIMESTAMP:::date-rfc3339% %HOSTNAME% %syslogtag%: %msg%"
+
+    #### INPUTS ####
+
+    # Provides UDP syslog reception
+    input(type="imudp" port="514" ruleset="nest-processing")
+
+    # Provides TCP syslog reception
+    input(type="imtcp" port="514" ruleset="nest-processing")
+
+    #### RULESETS ####
+
+    # Main NEST processing ruleset
+    ruleset(name="nest-processing") {
+        # Filter out low priority messages during high load
+        if prifilt("*.*") then {
+            action(type="omfile"
+                file="/var/log/nest/syslog"
+                template="NEST"
+                dirCreateMode="0755"
+                fileCreateMode="0640"
+                umask="0022")
+
+            # Forward to remote syslog server if configured
+            # action(type="omfwd"
+            #     target="syslog.example.com"
+            #     port="514"
+            #     protocol="tcp"
+            #     action.resumeRetryCount="-1"
+            #     queue.type="linkedList"
+            #     queue.maxDiskSpace="1g")
+        }
+    }
+
+    #### SYSTEM SERVICES ####
+
+    # Emergency messages go to everybody logged in.
+    *.emerg                                :omusrmsg:*
+
+    # Authentication and authorization logs
+    auth,authpriv.*                         /var/log/nest/auth.log
+    *.*;auth,authpriv.none                  -/var/log/nest/syslog
+
+    # Mail logs
+    mail.err                                /var/log/nest/mail.err
+    mail.warning                            -/var/log/nest/mail.warn
+    mail.info                               -/var/log/nest/mail.info
+
+    # Kernel logs
+    kern.*                                  /var/log/nest/kernel.log
+
+    # NEST application logs
+    local0.*                                /var/log/nest/applications.log
+
+    # Resource monitoring logs
+    local1.*                                /var/log/nest/resources.log
+
+    # Database logs
+    local2.*                                /var/log/nest/database.log
+
+    # API logs
+    local3.*                                /var/log/nest/api.log
+
+    # Discard duplicates
+    :msg, contains, "duplicate" ~
+
+    # Discard null messages
+    :msg, regex, "^$" ~
+
+    # Default rules
+    *.*                                     -/var/log/nest/syslog
+
+    #### ARCHIVE/ROTATION ####
+    # Archived logs are under /var/log/archive/
+    # See /etc/logrotate.d/rsyslog for rotation rules
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rsyslog-logrotate
+  namespace: monitoring
+data:
+  logrotate.conf: |
+    /var/log/nest/*.log {
+        daily
+        rotate 14
+        compress
+        delaycompress
+        notifempty
+        create 0640 syslog adm
+        sharedscripts
+        postrotate
+            /lib/systemd/systemd-logind-reload > /dev/null 2>&1 || true
+            /etc/init.d/rsyslog rotate > /dev/null 2>&1 || true
+        endscript
+    }
+
+    /var/log/nest/syslog {
+        daily
+        rotate 30
+        compress
+        delaycompress
+        notifempty
+        create 0640 syslog adm
+        sharedscripts
+        postrotate
+            /etc/init.d/rsyslog rotate > /dev/null 2>&1 || true
+        endscript
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rsyslog-forwarding
+  namespace: monitoring
+data:
+  forwarding.conf: |
+    # Remote syslog server forwarding configuration
+    # Uncomment and configure the following to forward logs to an external syslog server
+
+    # TCP forwarding with TLS (recommended)
+    # action(type="omfwd"
+    #     target="syslog.example.com"
+    #     port="6514"
+    #     protocol="tcp"
+    #     streamDriver="gtls"
+    #     streamDriverMode="1"
+    #     streamDriverAuthMode="x509/name"
+    #     streamDriverPermittedPeer="syslog.example.com"
+    #     action.resumeRetryCount="-1"
+    #     queue.type="linkedList"
+    #     queue.maxDiskSpace="2g")
+
+    # UDP forwarding (legacy, less secure)
+    # action(type="omfwd"
+    #     target="syslog.example.com"
+    #     port="514"
+    #     protocol="udp"
+    #     action.resumeRetryCount="3")
+
+    # Local file backup (always enabled)
+    action(type="omfile"
+        file="/var/log/nest/forwarded.log"
+        template="NEST"
+        dirCreateMode="0755"
+        fileCreateMode="0640")

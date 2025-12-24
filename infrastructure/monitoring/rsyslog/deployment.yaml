@@ -1,0 +1,316 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rsyslog
+  namespace: monitoring
+  labels:
+    app: rsyslog
+    component: logging
+    version: "8.2310.0"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: rsyslog
+  template:
+    metadata:
+      labels:
+        app: rsyslog
+        component: logging
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9144"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: rsyslog
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        fsGroup: 0
+
+      # Init container to setup log directories
+      initContainers:
+        - name: setup-logs
+          image: busybox:1.35
+          command: ['sh', '-c']
+          args:
+            - |
+              mkdir -p /var/log/nest
+              chmod 0755 /var/log/nest
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/nest
+
+      containers:
+        # Main rsyslog container
+        - name: rsyslog
+          image: rsyslog/rsyslog_dev:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - NET_BIND_SERVICE
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+
+          ports:
+            # UDP syslog
+            - name: syslog-udp
+              containerPort: 514
+              protocol: UDP
+            # TCP syslog
+            - name: syslog-tcp
+              containerPort: 514
+              protocol: TCP
+
+          # Resource limits
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # Volume mounts
+          volumeMounts:
+            # Main rsyslog configuration
+            - name: rsyslog-config
+              mountPath: /etc/rsyslog.conf
+              subPath: rsyslog.conf
+              readOnly: true
+            # Forwarding configuration
+            - name: rsyslog-forwarding
+              mountPath: /etc/rsyslog.d/forwarding.conf
+              subPath: forwarding.conf
+              readOnly: true
+            # Log rotation
+            - name: rsyslog-logrotate
+              mountPath: /etc/logrotate.d/rsyslog
+              subPath: logrotate.conf
+              readOnly: true
+            # Persistent log storage
+            - name: logs
+              mountPath: /var/log/nest
+            # Temp directory for queue
+            - name: tmp
+              mountPath: /tmp
+            # Work directory
+            - name: work
+              mountPath: /var/lib/rsyslog
+
+          # Liveness probe
+          livenessProbe:
+            tcpSocket:
+              port: syslog-tcp
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness probe
+          readinessProbe:
+            tcpSocket:
+              port: syslog-tcp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Environment variables
+          env:
+            - name: SYSLOG_LEVEL
+              value: "info"
+            - name: RSYSLOG_FEATURES
+              value: "+imudp +imtcp"
+            - name: LOG_RETENTION_DAYS
+              value: "30"
+
+          # Startup sequence
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "Rsyslog container started at $(date)"
+                    # Create necessary log files
+                    touch /var/log/nest/syslog
+                    touch /var/log/nest/auth.log
+                    touch /var/log/nest/kernel.log
+                    touch /var/log/nest/applications.log
+                    touch /var/log/nest/api.log
+                    chmod 0640 /var/log/nest/*.log
+
+        # Prometheus exporter for rsyslog metrics
+        - name: rsyslog-exporter
+          image: prometheus/rsyslog-exporter:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+
+          ports:
+            - name: metrics
+              containerPort: 9144
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+          env:
+            - name: SYSLOG_ADDR
+              value: "localhost:514"
+
+          # Liveness probe
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness probe
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 2
+
+      # Volumes
+      volumes:
+        # ConfigMaps for configuration files
+        - name: rsyslog-config
+          configMap:
+            name: rsyslog-config
+            defaultMode: 0644
+        - name: rsyslog-forwarding
+          configMap:
+            name: rsyslog-forwarding
+            defaultMode: 0644
+        - name: rsyslog-logrotate
+          configMap:
+            name: rsyslog-logrotate
+            defaultMode: 0644
+        # Persistent storage for logs
+        - name: logs
+          persistentVolumeClaim:
+            claimName: rsyslog-logs-pvc
+        # EmptyDir for temporary storage
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+
+      # Pod affinity for distribution
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - rsyslog
+                topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 10
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+
+      # Node selector (optional)
+      # nodeSelector:
+      #   logging-node: "true"
+
+      # Tolerations (optional)
+      # tolerations:
+      #   - key: "dedicated"
+      #     operator: "Equal"
+      #     value: "logging"
+      #     effect: "NoSchedule"
+
+      # Termination period
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rsyslog-logs-pvc
+  namespace: monitoring
+  labels:
+    app: rsyslog
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rsyslog
+  namespace: monitoring
+  labels:
+    app: rsyslog
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rsyslog
+  labels:
+    app: rsyslog
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rsyslog
+  labels:
+    app: rsyslog
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rsyslog
+subjects:
+  - kind: ServiceAccount
+    name: rsyslog
+    namespace: monitoring

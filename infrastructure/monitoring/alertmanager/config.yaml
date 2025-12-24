@@ -1,0 +1,165 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      slack_api_url: ""
+      pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+
+    # Webhook for custom integrations
+    webhook_configs:
+      - url: "http://alertmanager-webhook:5001/"
+        send_resolved: true
+
+    # Main route configuration
+    route:
+      receiver: "default"
+      group_by:
+        - alertname
+        - cluster
+        - service
+        - severity
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 4h
+
+      # Platform team routes
+      routes:
+        - receiver: "platform-team"
+          match:
+            team: platform
+          group_by:
+            - alertname
+            - instance
+            - severity
+          group_wait: 10s
+          group_interval: 10s
+          repeat_interval: 4h
+          continue: false
+
+        # Backend team routes
+        - receiver: "backend-team"
+          match:
+            team: backend
+          group_by:
+            - alertname
+            - instance
+            - severity
+          group_wait: 10s
+          group_interval: 10s
+          repeat_interval: 4h
+          continue: false
+
+        # Critical severity routes (immediate notification)
+        - receiver: "critical-alerts"
+          match:
+            severity: critical
+          group_by:
+            - alertname
+            - cluster
+          group_wait: 0s
+          group_interval: 5m
+          repeat_interval: 1h
+          continue: true
+
+    # Receivers
+    receivers:
+      # Default receiver - log alerts
+      - name: "default"
+        webhook_configs:
+          - url: "http://alertmanager-webhook:5001/"
+            send_resolved: true
+
+      # Platform team email notifications
+      - name: "platform-team"
+        email_configs:
+          - to: "platform@nest.local"
+            from: "alertmanager@nest.local"
+            smarthost: "smtp.nest.local:587"
+            auth_username: "alertmanager@nest.local"
+            auth_password: "CHANGE_ME"
+            require_tls: true
+            headers:
+              Subject: "[{{ .GroupLabels.severity | toUpper }}] NEST Alert: {{ .GroupLabels.alertname }}"
+              X-Alert-Source: "NEST-Prometheus"
+              X-Alert-Cluster: "{{ .GroupLabels.cluster }}"
+
+      # Backend team email notifications
+      - name: "backend-team"
+        email_configs:
+          - to: "backend@nest.local"
+            from: "alertmanager@nest.local"
+            smarthost: "smtp.nest.local:587"
+            auth_username: "alertmanager@nest.local"
+            auth_password: "CHANGE_ME"
+            require_tls: true
+            headers:
+              Subject: "[{{ .GroupLabels.severity | toUpper }}] NEST Alert: {{ .GroupLabels.alertname }}"
+              X-Alert-Source: "NEST-Prometheus"
+
+      # Critical alerts - PagerDuty integration
+      - name: "critical-alerts"
+        pagerduty_configs:
+          - service_key: "YOUR_PAGERDUTY_SERVICE_KEY"
+            description: "{{ .GroupLabels.alertname }} ({{ .GroupLabels.cluster }})"
+            details:
+              firing: "{{ template \"pagerduty.default.firing_instances\" .Alerts.Firing }}"
+              resolved: "{{ template \"pagerduty.default.resolved_instances\" .Alerts.Resolved }}"
+              severity: "{{ .GroupLabels.severity }}"
+
+      # Slack notifications (optional)
+      # - name: "slack-team"
+      #   slack_configs:
+      #     - api_url: "YOUR_SLACK_WEBHOOK_URL"
+      #       channel: "#nest-alerts"
+      #       title: "{{ .GroupLabels.alertname }}"
+      #       text: "{{ .GroupLabels.severity | toUpper }} Alert"
+      #       send_resolved: true
+      #       color: "{{ if eq .Status \"firing\" }}danger{{ else }}good{{ end }}"
+
+    # Inhibit rules to prevent duplicate alerts
+    inhibit_rules:
+      # Inhibit warning/info when critical is firing
+      - source_match:
+          severity: critical
+        target_match_re:
+          severity: warning|info
+        equal:
+          - alertname
+          - cluster
+          - service
+
+      # Inhibit info when warning is firing
+      - source_match:
+          severity: warning
+        target_match:
+          severity: info
+        equal:
+          - alertname
+          - cluster
+          - service
+
+      # Inhibit duplicate alerts on same instance
+      - source_match:
+          severity: critical
+        target_match:
+          severity: critical
+        equal:
+          - alertname
+          - instance
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-secrets
+  namespace: monitoring
+type: Opaque
+stringData:
+  smtp-password: "CHANGE_ME_SMTP_PASSWORD"
+  pagerduty-service-key: "YOUR_PAGERDUTY_SERVICE_KEY"
+  slack-webhook-url: "YOUR_SLACK_WEBHOOK_URL"

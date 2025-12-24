@@ -1,0 +1,172 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nest-api
+  namespace: monitoring
+  labels:
+    app: nest-api
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: nest-api
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nest-manager
+  namespace: monitoring
+  labels:
+    app: nest-manager
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: nest-manager
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nest-web
+  namespace: monitoring
+  labels:
+    app: nest-web
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: nest-web
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nest-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+spec:
+  groups:
+    - name: nest.rules
+      interval: 30s
+      rules:
+        # Resource Utilization Alerts
+        - alert: HighCPUUsage
+          expr: 'rate(container_cpu_usage_seconds_total{pod=~"nest-.*"}[5m]) > 0.8'
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "High CPU usage on {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} CPU usage is above 80% for the last 5 minutes"
+
+        - alert: CriticalCPUUsage
+          expr: 'rate(container_cpu_usage_seconds_total{pod=~"nest-.*"}[5m]) > 0.95'
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Critical CPU usage on {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} CPU usage is above 95% - immediate action required"
+
+        # Memory Alerts
+        - alert: HighMemoryUsage
+          expr: 'container_memory_usage_bytes{pod=~"nest-.*"} / container_spec_memory_limit_bytes > 0.8'
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "High memory usage on {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} memory usage is above 80% for the last 5 minutes"
+
+        - alert: CriticalMemoryUsage
+          expr: 'container_memory_usage_bytes{pod=~"nest-.*"} / container_spec_memory_limit_bytes > 0.95'
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Critical memory usage on {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} memory usage is above 95% - OOMKilled at risk"
+
+        # Pod Restart Alerts
+        - alert: PodRestarting
+          expr: 'rate(kube_pod_container_status_restarts_total{pod=~"nest-.*"}[15m]) > 0'
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} is restarting"
+            description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
+
+        # Service Availability
+        - alert: ServiceDown
+          expr: 'up{job=~"nest-.*"} == 0'
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Service {{ $labels.job }} is down"
+            description: "Service {{ $labels.job }} has been down for more than 2 minutes"
+
+        # Error Rate
+        - alert: HighErrorRate
+          expr: 'rate(http_requests_total{status=~"5.."}[5m]) > 0.05'
+          for: 5m
+          labels:
+            severity: warning
+            team: backend
+          annotations:
+            summary: "High error rate detected"
+            description: "Error rate (5xx) is above 5% on {{ $labels.instance }}"
+
+        # Response Time
+        - alert: SlowResponseTime
+          expr: 'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1'
+          for: 5m
+          labels:
+            severity: warning
+            team: backend
+          annotations:
+            summary: "Slow response time detected"
+            description: "95th percentile response time is above 1 second on {{ $labels.instance }}"
+
+        # Disk Space
+        - alert: DiskSpaceWarning
+          expr: 'node_filesystem_avail_bytes / node_filesystem_size_bytes < 0.2'
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Low disk space on {{ $labels.node }}"
+            description: "Less than 20% disk space available on {{ $labels.mountpoint }}"
+
+        - alert: DiskSpaceCritical
+          expr: 'node_filesystem_avail_bytes / node_filesystem_size_bytes < 0.05'
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Critical disk space on {{ $labels.node }}"
+            description: "Less than 5% disk space available - immediate action required"

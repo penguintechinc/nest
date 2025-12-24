@@ -1,0 +1,246 @@
+prometheus:
+  enabled: true
+  prometheusSpec:
+    image:
+      repository: quay.io/prometheus/prometheus
+      tag: v2.50.0
+
+    # Resource requests and limits
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+      limits:
+        cpu: 2
+        memory: 4Gi
+
+    # Storage configuration
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: fast-ssd
+
+    # Retention policy
+    retention: 15d
+    retentionSize: "90Gi"
+
+    # Service monitor selectors
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels:
+        prometheus: kube-prometheus
+
+    # Pod monitor selectors
+    podMonitorSelectorNilUsesHelmValues: false
+
+    # Rule selectors
+    ruleSelector:
+      matchLabels:
+        prometheus: kube-prometheus
+
+    # Scrape interval configuration
+    scrapeInterval: 30s
+    scrapeTimeout: 10s
+    evaluationInterval: 30s
+
+    # External labels
+    externalLabels:
+      cluster: "nest-production"
+      environment: "prod"
+
+    # Enable admin API
+    enableAdminAPI: true
+
+    # WAL segment size
+    walSamplesPerSegment: 131072
+
+    # Query logging
+    queryLogFile: /prometheus/query.log
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - prometheus.nest.local
+    pathType: Prefix
+    paths:
+      - /
+    annotations:
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: prometheus-auth
+      nginx.ingress.kubernetes.io/auth-realm: 'Prometheus'
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9090
+    targetPort: 9090
+
+grafana:
+  enabled: true
+  image:
+    repository: grafana/grafana
+    tag: 10.2.0
+
+  # Admin credentials (change on first login)
+  adminPassword: admin
+  adminUser: admin
+
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClassName: fast-ssd
+    size: 10Gi
+    type: pvc
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 3000
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    path: /
+    hosts:
+      - grafana.nest.local
+    pathType: Prefix
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+
+  # Pre-configured datasources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://kube-prometheus-stack-prometheus:9090
+          access: proxy
+          isDefault: true
+          jsonData:
+            timeInterval: 30s
+
+  # Dashboard provisioning
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'NEST Dashboards'
+          orgId: 1
+          folder: 'NEST'
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 10
+          allowUiUpdates: true
+          options:
+            path: /var/lib/grafana/dashboards/nest
+
+  dashboards:
+    nest:
+      nest-overview: {}
+      nest-resources: {}
+
+  # Grafana plugins
+  plugins:
+    - grafana-piechart-panel
+    - alexanderzobnin-zabbix-app
+    - grafana-worldmap-panel
+
+  # Additional environment variables
+  env:
+    GF_SECURITY_ADMIN_PASSWORD: admin
+    GF_USERS_ALLOW_SIGN_UP: "false"
+    GF_INSTALL_PLUGINS: "grafana-piechart-panel"
+
+alertmanager:
+  enabled: true
+  config:
+    route:
+      receiver: 'default'
+      group_by: ['alertname', 'cluster', 'service', 'severity']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 4h
+      routes:
+        - receiver: 'platform-team'
+          match:
+            team: platform
+          continue: true
+        - receiver: 'backend-team'
+          match:
+            team: backend
+          continue: true
+
+    receivers:
+      - name: 'default'
+        webhook_configs:
+          - url: 'http://localhost:5001/'
+      - name: 'platform-team'
+        email_configs:
+          - to: 'platform@nest.local'
+            from: 'alertmanager@nest.local'
+            smarthost: 'smtp.nest.local:587'
+            auth_username: 'alertmanager@nest.local'
+            auth_password: 'changeme'
+            headers:
+              Subject: '[{{ .GroupLabels.severity }}] {{ .GroupLabels.alertname }}'
+      - name: 'backend-team'
+        email_configs:
+          - to: 'backend@nest.local'
+            from: 'alertmanager@nest.local'
+            smarthost: 'smtp.nest.local:587'
+            auth_username: 'alertmanager@nest.local'
+            auth_password: 'changeme'
+            headers:
+              Subject: '[{{ .GroupLabels.severity }}] {{ .GroupLabels.alertname }}'
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - alertmanager.nest.local
+    pathType: Prefix
+    paths:
+      - /
+
+prometheus-node-exporter:
+  enabled: true
+  image:
+    repository: quay.io/prometheus/node-exporter
+    tag: v1.7.0
+
+  # Enable textfile collector for custom metrics
+  extraArgs:
+    - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+    - --collector.systemd
+
+kube-state-metrics:
+  enabled: true
+  image:
+    repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+    tag: v2.10.0
+
+# RBAC configuration
+rbac:
+  create: true
+
+# Service account configuration
+serviceAccount:
+  create: true
+  name: kube-prometheus-stack

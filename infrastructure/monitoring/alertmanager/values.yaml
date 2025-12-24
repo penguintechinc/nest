@@ -1,0 +1,250 @@
+alertmanager:
+  enabled: true
+  image:
+    repository: quay.io/prometheus/alertmanager
+    tag: v0.26.0
+
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9093
+    targetPort: 9093
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - alertmanager.nest.local
+    pathType: Prefix
+    paths:
+      - /
+    annotations:
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: alertmanager-auth
+      nginx.ingress.kubernetes.io/auth-realm: 'AlertManager'
+
+  # Persistence configuration
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: fast-ssd
+
+  # Alert configuration
+  config:
+    global:
+      resolve_timeout: 5m
+      slack_api_url: ""  # Set your Slack webhook URL
+      pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+      opsgenie_api_host: "https://api.opsgenie.com/"
+      opsgenie_api_key: ""  # Set your OpsGenie API key
+
+    # Alert routing
+    route:
+      receiver: "default"
+      group_by:
+        - alertname
+        - cluster
+        - service
+        - severity
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 4h
+
+      # Nested routes for different teams
+      routes:
+        # Platform team alerts
+        - receiver: "platform-email"
+          match:
+            team: platform
+          continue: true
+          group_by:
+            - alertname
+            - severity
+          group_wait: 10s
+          group_interval: 10s
+
+        # Backend team alerts
+        - receiver: "backend-email"
+          match:
+            team: backend
+          continue: true
+          group_by:
+            - alertname
+            - severity
+          group_wait: 10s
+          group_interval: 10s
+
+        # Critical alerts - immediate notification
+        - receiver: "critical-pagerduty"
+          match:
+            severity: critical
+          continue: true
+          group_by:
+            - alertname
+          group_wait: 0s
+          group_interval: 5m
+
+    # Receivers configuration
+    receivers:
+      # Default receiver
+      - name: "default"
+        webhook_configs:
+          - url: "http://alertmanager-webhook:5001/"
+            send_resolved: true
+
+      # Platform team email notifications
+      - name: "platform-email"
+        email_configs:
+          - to: "platform@nest.local"
+            from: "alertmanager@nest.local"
+            smarthost: "smtp.nest.local:587"
+            auth_username: "alertmanager@nest.local"
+            auth_password: "${SMTP_PASSWORD}"
+            require_tls: true
+            headers:
+              Subject: "[{{ .GroupLabels.severity | toUpper }}] {{ .GroupLabels.alertname }} - {{ .GroupLabels.cluster }}"
+              X-Custom-Header: "NEST-Alerts"
+            html: |
+              <h2>Alert Details</h2>
+              <p><strong>Alert Name:</strong> {{ .GroupLabels.alertname }}</p>
+              <p><strong>Severity:</strong> {{ .GroupLabels.severity }}</p>
+              <p><strong>Cluster:</strong> {{ .GroupLabels.cluster }}</p>
+              <hr>
+              {{ range .Alerts }}
+              <h3>{{ .Labels.instance }}</h3>
+              <p>{{ .Annotations.description }}</p>
+              {{ end }}
+
+      # Backend team email notifications
+      - name: "backend-email"
+        email_configs:
+          - to: "backend@nest.local"
+            from: "alertmanager@nest.local"
+            smarthost: "smtp.nest.local:587"
+            auth_username: "alertmanager@nest.local"
+            auth_password: "${SMTP_PASSWORD}"
+            require_tls: true
+            headers:
+              Subject: "[{{ .GroupLabels.severity | toUpper }}] {{ .GroupLabels.alertname }}"
+              X-Custom-Header: "NEST-Alerts"
+
+      # Critical alerts via PagerDuty
+      - name: "critical-pagerduty"
+        pagerduty_configs:
+          - service_key: "${PAGERDUTY_SERVICE_KEY}"
+            description: "{{ .GroupLabels.alertname }}"
+            details:
+              firing: "{{ range .Alerts.Firing }}{{ .Labels.instance }} {{ end }}"
+              resolved: "{{ range .Alerts.Resolved }}{{ .Labels.instance }} {{ end }}"
+
+      # Slack notifications (optional)
+      # - name: "slack"
+      #   slack_configs:
+      #     - api_url: "${SLACK_WEBHOOK_URL}"
+      #       channel: "#alerts"
+      #       title: "{{ .GroupLabels.alertname }}"
+      #       text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+
+    # Inhibition rules - prevent duplicate alerts
+    inhibit_rules:
+      # Inhibit warning alerts when critical is firing
+      - source_match:
+          severity: critical
+        target_match:
+          severity: warning
+        equal:
+          - alertname
+          - cluster
+          - service
+
+      # Inhibit info alerts when warning is firing
+      - source_match:
+          severity: warning
+        target_match:
+          severity: info
+        equal:
+          - alertname
+          - cluster
+          - service
+
+  # Pod annotations for Prometheus scraping
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9093"
+
+  # Pod labels
+  podLabels:
+    app: alertmanager
+
+  # Service account
+  serviceAccount:
+    create: true
+    name: alertmanager
+
+  # Security context
+  securityContext:
+    fsGroup: 65534
+    runAsUser: 65534
+    runAsNonRoot: true
+
+  # Affinity rules
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - alertmanager
+            topologyKey: kubernetes.io/hostname
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Update strategy
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+
+# AlertManager configuration via ConfigMap
+alertmanagerConfigSecret:
+  name: alertmanager-config
+
+# Environment variables for sensitive data
+alertmanagerEnv:
+  - name: SMTP_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: alertmanager-secrets
+        key: smtp-password
+  - name: PAGERDUTY_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: alertmanager-secrets
+        key: pagerduty-service-key
+  - name: SLACK_WEBHOOK_URL
+    valueFrom:
+      secretKeyRef:
+        name: alertmanager-secrets
+        key: slack-webhook-url
