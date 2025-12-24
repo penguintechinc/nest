@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/penguintechinc/project-template/apps/api/controllers"
+	"github.com/penguintechinc/project-template/shared/database"
 	"github.com/penguintechinc/project-template/shared/licensing"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -62,6 +64,24 @@ func main() {
 		}
 	}
 
+	// Initialize database
+	db, err := database.New(database.DefaultConfig())
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer db.Close()
+
+	// Run database migrations
+	if err := db.Migrate(
+		&database.User{},
+		&database.Team{},
+		&database.TeamMember{},
+		&database.Session{},
+		&database.LicenseUsage{},
+	); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
+
 	// Set up Gin router
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -116,6 +136,22 @@ func main() {
 		enterprise.Use(fg.RequireFeature("enterprise_features"))
 		{
 			enterprise.GET("/reports", getEnterpriseReports)
+		}
+
+		// Team routes
+		teamsController := controllers.NewTeamsController(db)
+		teams := v1.Group("/teams")
+		{
+			teams.GET("", teamsController.ListTeams)
+			teams.POST("", teamsController.CreateTeam)
+			teams.GET("/:id", teamsController.GetTeam)
+			teams.PUT("/:id", teamsController.UpdateTeam)
+			teams.DELETE("/:id", teamsController.DeleteTeam)
+
+			// Team members routes
+			teams.GET("/:id/members", teamsController.ListTeamMembers)
+			teams.POST("/:id/members", teamsController.AddTeamMember)
+			teams.DELETE("/:id/members/:user_id", teamsController.RemoveTeamMember)
 		}
 	}
 

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -249,4 +250,23 @@ type Session struct {
 	ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
 	IPAddress string    `json:"ip_address"`
 	UserAgent string    `json:"user_agent"`
+}
+
+// Team model for team management
+type Team struct {
+	BaseModel
+	Name        string       `gorm:"uniqueIndex;not null" json:"name"`
+	Description string       `json:"description"`
+	IsGlobal    bool         `gorm:"default:false" json:"is_global"`
+	Members     []TeamMember `gorm:"foreignKey:TeamID" json:"members,omitempty"`
+}
+
+// TeamMember model for team membership
+type TeamMember struct {
+	BaseModel
+	TeamID uint      `gorm:"not null;index:idx_team_user,unique" json:"team_id"`
+	Team   Team      `gorm:"foreignKey:TeamID" json:"team,omitempty"`
+	UserID uint      `gorm:"not null;index:idx_team_user,unique" json:"user_id"`
+	User   User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Role   string    `gorm:"not null;default:team_viewer" json:"role"` // team_admin, team_maintainer, team_viewer
 }
