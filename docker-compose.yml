@@ -1,14 +1,25 @@
 version: '3.8'
 
+# NEST Development Environment - Docker Compose
+# Comprehensive multi-service development setup with:
+# - PostgreSQL 16 database
+# - Redis 7 cache layer
+# - Go API service with hot reload
+# - Python Manager service with live reload
+# - React frontend with Vite dev server
+# - Database initialization service
+# - Monitoring with Prometheus and Grafana
+# - Reverse proxy with Nginx
+
 services:
-  # PostgreSQL Database
+  # PostgreSQL 16 Database
   postgres:
-    image: postgres:15-alpine
-    container_name: project-template-postgres
+    image: postgres:16-alpine
+    container_name: nest-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-project_template}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-nest}
+      POSTGRES_USER: ${POSTGRES_USER:-nest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nest123}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -16,48 +27,62 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-project_template}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nest} -d ${POSTGRES_DB:-nest}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
     networks:
-      - app-network
+      - nest-network
+    labels:
+      - "com.nest.service=database"
 
-  # Redis Cache
+  # Redis 7 Cache Layer
   redis:
     image: redis:7-alpine
-    container_name: project-template-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD:-password} --appendonly yes
+    container_name: nest-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-nest123} --appendonly yes
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
-      - ./infrastructure/docker/redis/redis.conf:/etc/redis/redis.conf
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
     networks:
-      - app-network
+      - nest-network
+    labels:
+      - "com.nest.service=cache"
 
-  # Go API Service
+  # Go API Service with Hot Reload
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: project-template-api
+      target: development
+    container_name: nest-api
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-project_template}?sslmode=disable
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-password}@redis:6379/0
-      - LICENSE_KEY=${LICENSE_KEY}
-      - PRODUCT_NAME=${PRODUCT_NAME:-project-template}
-      - LICENSE_SERVER_URL=${LICENSE_SERVER_URL:-https://license.penguintech.io}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-nest}
+      - DB_USER=${POSTGRES_USER:-nest}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-nest123}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-nest123}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-prod}
       - PORT=8080
       - GIN_MODE=${GIN_MODE:-debug}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - ENVIRONMENT=development
+      - LICENSE_KEY=${LICENSE_KEY:-PENG-XXXX-XXXX-XXXX-XXXX-ABCD}
+      - PRODUCT_NAME=${PRODUCT_NAME:-nest}
+      - LICENSE_SERVER_URL=${LICENSE_SERVER_URL:-https://license.penguintech.io}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
@@ -66,76 +91,137 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
     restart: unless-stopped
     networks:
-      - app-network
+      - nest-network
+    volumes:
+      - ./apps/api:/app
+      - /app/bin
+    working_dir: /app
+    labels:
+      - "com.nest.service=api"
 
-  # Python Web Application (py4web)
-  web-python:
+  # Python Manager Service with Live Reload
+  manager:
     build:
       context: .
-      dockerfile: apps/web/Dockerfile
-    container_name: project-template-web-python
+      dockerfile: apps/manager/Dockerfile
+      target: development
+    container_name: nest-manager
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-project_template}?sslmode=disable
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-password}@redis:6379/1
-      - LICENSE_KEY=${LICENSE_KEY}
-      - PRODUCT_NAME=${PRODUCT_NAME:-project-template}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-nest}
+      - DB_USER=${POSTGRES_USER:-nest}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-nest123}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-nest123}
+      - PORT=8000
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - LICENSE_KEY=${LICENSE_KEY:-PENG-XXXX-XXXX-XXXX-XXXX-ABCD}
+      - PRODUCT_NAME=${PRODUCT_NAME:-nest}
       - LICENSE_SERVER_URL=${LICENSE_SERVER_URL:-https://license.penguintech.io}
-      - PY4WEB_APPS_FOLDER=/app/apps
-      - PY4WEB_HOST=0.0.0.0
-      - PY4WEB_PORT=8000
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
     ports:
-      - "${WEB_PYTHON_PORT:-8000}:8000"
+      - "${MANAGER_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
     restart: unless-stopped
     networks:
-      - app-network
+      - nest-network
+    volumes:
+      - ./apps/manager:/app
+    working_dir: /app
+    labels:
+      - "com.nest.service=manager"
 
-  # Node.js Web Application
-  web-node:
+  # React Frontend with Vite Dev Server
+  web:
     build:
-      context: web
+      context: ./web
       dockerfile: Dockerfile
-    container_name: project-template-web-node
+      target: development
+    container_name: nest-web
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=development
       - PORT=3000
-      - LICENSE_KEY=${LICENSE_KEY}
-      - PRODUCT_NAME=${PRODUCT_NAME:-project-template}
-      - LICENSE_SERVER_URL=${LICENSE_SERVER_URL:-https://license.penguintech.io}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-project_template}?sslmode=disable
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-password}@redis:6379/2
+      - VITE_API_URL=http://localhost:8080
+      - VITE_MANAGER_URL=http://localhost:8000
     ports:
-      - "${WEB_NODE_PORT:-3000}:3000"
+      - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - redis
+      - api
+      - manager
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
     restart: unless-stopped
     networks:
-      - app-network
+      - nest-network
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.vite
+    working_dir: /app
+    labels:
+      - "com.nest.service=frontend"
 
-  # Prometheus Monitoring
+  # Database Initialization Service (runs once)
+  db-init:
+    build:
+      context: .
+      dockerfile: apps/manager/Dockerfile
+      target: development
+    container_name: nest-db-init
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-nest}
+      - DB_USER=${POSTGRES_USER:-nest}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-nest123}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nest-network
+    volumes:
+      - ./apps/manager:/app
+    working_dir: /app
+    command: python db_init.py
+    restart: "no"
+    labels:
+      - "com.nest.service=db-init"
+
+  # Prometheus Metrics Collection
   prometheus:
     image: prom/prometheus:latest
-    container_name: project-template-prometheus
+    container_name: nest-prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -149,17 +235,23 @@ services:
       - ./infrastructure/monitoring/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
     networks:
-      - app-network
+      - nest-network
     restart: unless-stopped
+    depends_on:
+      - api
+      - manager
+    labels:
+      - "com.nest.service=monitoring"
 
   # Grafana Dashboard
   grafana:
     image: grafana/grafana:latest
-    container_name: project-template-grafana
+    container_name: nest-grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     volumes:
@@ -169,41 +261,69 @@ services:
     depends_on:
       - prometheus
     networks:
-      - app-network
+      - nest-network
     restart: unless-stopped
+    labels:
+      - "com.nest.service=dashboards"
 
   # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
-    container_name: project-template-nginx
+    container_name: nest-nginx
     ports:
       - "${NGINX_HTTP_PORT:-80}:80"
       - "${NGINX_HTTPS_PORT:-443}:443"
     volumes:
-      - ./infrastructure/docker/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./infrastructure/docker/nginx/conf.d:/etc/nginx/conf.d
-      - ./infrastructure/docker/nginx/ssl:/etc/nginx/ssl
+      - ./infrastructure/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infrastructure/docker/nginx/ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     depends_on:
       - api
-      - web-python
-      - web-node
+      - manager
+      - web
     networks:
-      - app-network
+      - nest-network
     restart: unless-stopped
+    labels:
+      - "com.nest.service=proxy"
 
+# Persistent Data Volumes
 volumes:
   postgres_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
   redis_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
   prometheus_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/prometheus
   grafana_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/grafana
   nginx_logs:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs/nginx
 
+# Network Configuration
 networks:
-  app-network:
+  nest-network:
     driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500

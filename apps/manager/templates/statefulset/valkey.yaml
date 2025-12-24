@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ valkey_name }}-headless
+  namespace: {{ namespace }}
+  labels:
+    app: valkey
+    component: cache
+    managed-by: nest
+spec:
+  clusterIP: None
+  selector:
+    app: valkey
+    instance: {{ valkey_name }}
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: valkey
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ valkey_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: valkey
+    component: cache
+    managed-by: nest
+spec:
+  serviceName: {{ valkey_name }}-headless
+  replicas: {{ valkey_replicas | default(1) }}
+  selector:
+    matchLabels:
+      app: valkey
+      instance: {{ valkey_name }}
+  volumeClaimTemplates:
+    - metadata:
+        name: valkey-storage
+        labels:
+          app: valkey
+          instance: {{ valkey_name }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ storage_class | default('standard') }}
+        resources:
+          requests:
+            storage: {{ valkey_storage_size | default('5Gi') }}
+  template:
+    metadata:
+      labels:
+        app: valkey
+        instance: {{ valkey_name }}
+        component: cache
+        managed-by: nest
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '6379'
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+      serviceAccountName: {{ valkey_name }}
+      containers:
+        - name: valkey
+          image: {{ valkey_image | default('valkey/valkey:7-alpine') }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - valkey-server
+            - '--bind'
+            - '0.0.0.0'
+            - '--port'
+            - '6379'
+            - '--appendonly'
+            - 'yes'
+            - '--appendfilename'
+            - 'appendonly.aof'
+            - '--dir'
+            - '/data'
+            - '--databases'
+            - '16'
+            - '--loglevel'
+            - 'notice'
+            - '--save'
+            - '900'
+            - '1'
+            - '--save'
+            - '300'
+            - '10'
+            - '--save'
+            - '60'
+            - '10000'
+            {% if valkey_password_enabled | default(false) %}
+            - '--requirepass'
+            - '$(VALKEY_PASSWORD)'
+            {% endif %}
+            {% if valkey_tls_enabled | default(false) %}
+            - '--tls-port'
+            - '6380'
+            - '--tls-cert-file'
+            - '/etc/valkey/tls/tls.crt'
+            - '--tls-key-file'
+            - '/etc/valkey/tls/tls.key'
+            - '--tls-ca-cert-file'
+            - '/etc/valkey/tls/ca.crt'
+            {% endif %}
+          ports:
+            - name: valkey
+              containerPort: 6379
+              protocol: TCP
+            {% if valkey_tls_enabled | default(false) %}
+            - name: valkey-tls
+              containerPort: 6380
+              protocol: TCP
+            {% endif %}
+          env:
+            {% if valkey_password_enabled | default(false) %}
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ valkey_secret_name | default(valkey_name + '-secret') }}
+                  key: password
+            {% endif %}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              memory: {{ valkey_memory_request | default('128Mi') }}
+              cpu: {{ valkey_cpu_request | default('50m') }}
+            limits:
+              memory: {{ valkey_memory_limit | default('256Mi') }}
+              cpu: {{ valkey_cpu_limit | default('200m') }}
+          volumeMounts:
+            - name: valkey-storage
+              mountPath: /data
+            {% if valkey_tls_enabled | default(false) %}
+            - name: valkey-tls
+              mountPath: /etc/valkey/tls
+              readOnly: true
+            {% endif %}
+          livenessProbe:
+            exec:
+              command:
+                - valkey-cli
+                - '--raw'
+                - 'incr'
+                - 'liveness'
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - valkey-cli
+                - 'ping'
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        {% if valkey_tls_enabled | default(false) %}
+        - name: valkey-tls
+          secret:
+            secretName: {{ valkey_tls_secret_name | default(valkey_name + '-tls') }}
+            defaultMode: 0400
+        {% endif %}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - valkey
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30

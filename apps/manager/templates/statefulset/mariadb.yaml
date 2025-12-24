@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ mariadb_name }}-headless
+  namespace: {{ namespace }}
+  labels:
+    app: mariadb
+    component: database
+    managed-by: nest
+spec:
+  clusterIP: None
+  selector:
+    app: mariadb
+    instance: {{ mariadb_name }}
+  ports:
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
+      name: mariadb
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ mariadb_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: mariadb
+    component: database
+    managed-by: nest
+spec:
+  serviceName: {{ mariadb_name }}-headless
+  replicas: {{ mariadb_replicas | default(1) }}
+  selector:
+    matchLabels:
+      app: mariadb
+      instance: {{ mariadb_name }}
+  volumeClaimTemplates:
+    - metadata:
+        name: mariadb-storage
+        labels:
+          app: mariadb
+          instance: {{ mariadb_name }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ storage_class | default('standard') }}
+        resources:
+          requests:
+            storage: {{ mariadb_storage_size | default('10Gi') }}
+  template:
+    metadata:
+      labels:
+        app: mariadb
+        instance: {{ mariadb_name }}
+        component: database
+        managed-by: nest
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '3306'
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+      serviceAccountName: {{ mariadb_name }}
+      containers:
+        - name: mariadb
+          image: {{ mariadb_image | default('mariadb:11-jammy') }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mariadb
+              containerPort: 3306
+              protocol: TCP
+          env:
+            - name: MARIADB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ mariadb_secret_name | default(mariadb_name + '-secret') }}
+                  key: database-name
+            - name: MARIADB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ mariadb_secret_name | default(mariadb_name + '-secret') }}
+                  key: username
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ mariadb_secret_name | default(mariadb_name + '-secret') }}
+                  key: password
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ mariadb_secret_name | default(mariadb_name + '-secret') }}
+                  key: root-password
+            - name: MARIADB_INITDB_SKIP_TZINFO
+              value: '1'
+            - name: TZ
+              value: 'UTC'
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              memory: {{ mariadb_memory_request | default('256Mi') }}
+              cpu: {{ mariadb_cpu_request | default('100m') }}
+            limits:
+              memory: {{ mariadb_memory_limit | default('512Mi') }}
+              cpu: {{ mariadb_cpu_limit | default('500m') }}
+          volumeMounts:
+            - name: mariadb-storage
+              mountPath: /var/lib/mysql
+            - name: mariadb-config
+              mountPath: /etc/mysql/conf.d
+              readOnly: true
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - mysqladmin ping -u {{ mariadb_user | default('root') }} -p${MARIADB_ROOT_PASSWORD}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - mysqladmin ping -u {{ mariadb_user | default('root') }} -p${MARIADB_ROOT_PASSWORD}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: mariadb-config
+          configMap:
+            name: {{ mariadb_config_name | default('mariadb-config') }}
+            optional: true
+        - name: init-scripts
+          configMap:
+            name: {{ mariadb_init_scripts_config | default('mariadb-init-scripts') }}
+            optional: true
+            defaultMode: 0755
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - mariadb
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 60

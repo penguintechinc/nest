@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ redis_name }}-headless
+  namespace: {{ namespace }}
+  labels:
+    app: redis
+    component: cache
+    managed-by: nest
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+    instance: {{ redis_name }}
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: redis
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ redis_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: redis
+    component: cache
+    managed-by: nest
+spec:
+  serviceName: {{ redis_name }}-headless
+  replicas: {{ redis_replicas | default(1) }}
+  selector:
+    matchLabels:
+      app: redis
+      instance: {{ redis_name }}
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-storage
+        labels:
+          app: redis
+          instance: {{ redis_name }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ storage_class | default('standard') }}
+        resources:
+          requests:
+            storage: {{ redis_storage_size | default('5Gi') }}
+  template:
+    metadata:
+      labels:
+        app: redis
+        instance: {{ redis_name }}
+        component: cache
+        managed-by: nest
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '6379'
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+      serviceAccountName: {{ redis_name }}
+      containers:
+        - name: redis
+          image: {{ redis_image | default('redis:7-alpine') }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - redis-server
+            - '--bind'
+            - '0.0.0.0'
+            - '--port'
+            - '6379'
+            - '--appendonly'
+            - 'yes'
+            - '--appendfilename'
+            - 'appendonly.aof'
+            - '--dir'
+            - '/data'
+            - '--databases'
+            - '16'
+            - '--loglevel'
+            - 'notice'
+            {% if redis_password_enabled | default(false) %}
+            - '--requirepass'
+            - '$(REDIS_PASSWORD)'
+            {% endif %}
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          env:
+            {% if redis_password_enabled | default(false) %}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ redis_secret_name | default(redis_name + '-secret') }}
+                  key: password
+            {% endif %}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              memory: {{ redis_memory_request | default('128Mi') }}
+              cpu: {{ redis_cpu_request | default('50m') }}
+            limits:
+              memory: {{ redis_memory_limit | default('256Mi') }}
+              cpu: {{ redis_cpu_limit | default('200m') }}
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - '--raw'
+                - 'incr'
+                - 'liveness'
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - 'ping'
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - redis
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30

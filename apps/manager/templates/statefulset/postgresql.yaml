@@ -1,0 +1,175 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ postgresql_name }}-headless
+  namespace: {{ namespace }}
+  labels:
+    app: postgresql
+    component: database
+    managed-by: nest
+spec:
+  clusterIP: None
+  selector:
+    app: postgresql
+    instance: {{ postgresql_name }}
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgresql
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ postgresql_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: postgresql
+    component: database
+    managed-by: nest
+spec:
+  serviceName: {{ postgresql_name }}-headless
+  replicas: {{ postgresql_replicas | default(1) }}
+  selector:
+    matchLabels:
+      app: postgresql
+      instance: {{ postgresql_name }}
+  volumeClaimTemplates:
+    - metadata:
+        name: postgresql-storage
+        labels:
+          app: postgresql
+          instance: {{ postgresql_name }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ storage_class | default('standard') }}
+        resources:
+          requests:
+            storage: {{ postgresql_storage_size | default('10Gi') }}
+    - metadata:
+        name: postgresql-wal
+        labels:
+          app: postgresql
+          instance: {{ postgresql_name }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ storage_class | default('standard') }}
+        resources:
+          requests:
+            storage: {{ postgresql_wal_storage_size | default('5Gi') }}
+  template:
+    metadata:
+      labels:
+        app: postgresql
+        instance: {{ postgresql_name }}
+        component: database
+        managed-by: nest
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9187'
+        prometheus.io/path: '/metrics'
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+      serviceAccountName: {{ postgresql_name }}
+      containers:
+        - name: postgresql
+          image: {{ postgresql_image | default('postgres:16-alpine') }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ postgresql_secret_name | default(postgresql_name + '-secret') }}
+                  key: database-name
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ postgresql_secret_name | default(postgresql_name + '-secret') }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ postgresql_secret_name | default(postgresql_name + '-secret') }}
+                  key: password
+            - name: POSTGRES_INITDB_ARGS
+              value: '--auth-local=trust --encoding=UTF8 --locale=en_US.UTF-8'
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: REPLICA_NUMBER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              memory: {{ postgresql_memory_request | default('256Mi') }}
+              cpu: {{ postgresql_cpu_request | default('100m') }}
+            limits:
+              memory: {{ postgresql_memory_limit | default('512Mi') }}
+              cpu: {{ postgresql_cpu_limit | default('500m') }}
+          volumeMounts:
+            - name: postgresql-storage
+              mountPath: /var/lib/postgresql/data
+            - name: postgresql-wal
+              mountPath: /var/lib/postgresql/wal
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U {{ postgresql_user | default('postgres') }} -d {{ postgresql_database | default('postgres') }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U {{ postgresql_user | default('postgres') }} -d {{ postgresql_database | default('postgres') }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: {{ postgresql_init_scripts_config | default('postgresql-init-scripts') }}
+            optional: true
+            defaultMode: 0755
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - postgresql
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 60
