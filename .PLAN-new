@@ -1,0 +1,446 @@
+# Nest Storage Management System - Architecture Transformation Plan
+
+## Overview
+
+Transform Nest from the current multi-backend structure to a **three-layer Storage Management System**:
+
+1. **WebUI Container** - React SPA for user interaction
+2. **Controller Container** - Central management (Go-based, REST + gRPC)
+3. **Storage Agent(s)** - Distributed workers with pluggable storage backends
+4. **Protocol Proxy** - Serves backend storage as different protocols (e.g., Ceph → NFS, S3 → WebDAV)
+5. **Orchestration Provisioner** - Provisions storage to Kubernetes and LXD clusters
+
+## Target Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      User/Browser                            │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTPS
+┌──────────────────────────▼──────────────────────────────────┐
+│                 WebUI Container (React)                      │
+│   - Pure SPA served by nginx                                 │
+│   - JWT Authentication UI                                    │
+│   - Dashboard, monitoring, agent management                  │
+│   - Port: 3000                                               │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ REST API (HTTPS)
+┌──────────────────────────▼──────────────────────────────────┐
+│               Controller Container (Go)                      │
+│   - REST API for WebUI (:8080)                              │
+│   - gRPC Server for agents/proxies (:9090)                  │
+│   - Agent & proxy management                                │
+│   - License validation (PenguinTech)                        │
+│   - Centralized config management                           │
+│   - Prometheus metrics (:9091)                              │
+└───┬────────────────┬──────────────────┬─────────────────┬───┘
+    │                │                  │                 │
+┌───▼───┐      ┌─────▼─────┐           │            ┌────▼─────────────┐
+│Postgres│     │   Redis   │           │            │  Orchestration   │
+└───────┘      └───────────┘           │            │  Provisioner     │
+                                       │            │  - K8s CSI/PV    │
+                              gRPC (mTLS)           │  - LXD storage   │
+                                       │            │  - Auto-provision│
+    ┌──────────────────────────────────┼────────────┴──────────────────┐
+    │                                  │                               │
+┌───▼──────────────┐    ┌──────────────▼───────────┐    ┌──────────────▼──┐
+│ Storage Agent 1  │    │    Storage Agent 2       │    │ Protocol Proxy  │
+│ - S3/MinIO       │    │    - CephFS, RBD         │    │ - NFS Gateway   │
+│ - Plugin system  │    │    - Plugin system       │    │ - SMB Gateway   │
+└────────┬─────────┘    └──────────┬───────────────┘    │ - WebDAV        │
+         │                         │                    │ - S3 Gateway    │
+    ┌────▼────┐            ┌───────▼──────┐            └────────┬────────┘
+    │ MinIO   │            │ Ceph Cluster │                     │
+    └─────────┘            └──────┬───────┘                     │
+                                  │◄────────────────────────────┘
+                           (Ceph served as NFS/SMB/etc.)
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Kubernetes / LXD Clusters                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │ K8s PV/PVC  │  │ LXD Storage │  │ CSI Driver  │  │ Storage     │    │
+│  │ (auto-prov) │  │ Pool        │  │ Integration │  │ Classes     │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Protocol Proxy (Gateway)
+
+The Protocol Proxy enables serving backend storage as different protocols:
+
+| Backend Source | Can Serve As |
+|---------------|--------------|
+| Ceph RBD/CephFS | NFS, SMB/CIFS, iSCSI, S3 |
+| S3/MinIO | WebDAV, NFS (via FUSE), HTTP |
+| NFS | SMB, WebDAV |
+| iSCSI | NFS (via mount + re-export) |
+
+**Use Cases:**
+- Serve Ceph storage to legacy NFS clients
+- Provide SMB/CIFS access to S3 buckets for Windows clients
+- WebDAV gateway for web-based file access
+- Protocol translation without modifying backend infrastructure
+
+### Orchestration Provisioner
+
+Automatically provisions and manages storage in container orchestration platforms:
+
+**Kubernetes Integration:**
+- CSI (Container Storage Interface) driver
+- Dynamic PersistentVolume provisioning
+- StorageClass management
+- Snapshot and clone support
+
+**LXD Integration:**
+- Storage pool creation and management
+- Volume provisioning for containers/VMs
+- Profile-based storage assignment
+- Cluster-aware storage distribution
+
+## New Directory Structure
+
+```
+/home/penguin/code/Nest/
+├── archive/                        # Legacy code for reference
+│   ├── legacy-api/                 # Old Go API
+│   ├── legacy-web-python/          # Old py4web app
+│   └── docker-compose.legacy.yml   # Old compose file
+├── cmd/
+│   ├── controller/main.go          # Controller entry point
+│   ├── agent/main.go               # Storage Agent entry point
+│   ├── proxy/main.go               # Protocol Proxy entry point
+│   └── provisioner/main.go         # Orchestration Provisioner entry point
+├── internal/
+│   ├── controller/
+│   │   ├── api/handlers/           # REST API handlers
+│   │   ├── api/middleware/         # JWT, license, rate limiting
+│   │   ├── grpc/                   # gRPC server for agents
+│   │   ├── service/                # Business logic
+│   │   └── models/                 # Domain models
+│   ├── agent/
+│   │   ├── client/                 # gRPC client to controller
+│   │   ├── plugins/                # Storage plugin system
+│   │   │   ├── interface.go        # Plugin interface
+│   │   │   ├── registry.go         # Plugin registry
+│   │   │   ├── s3/                 # S3/MinIO plugin
+│   │   │   ├── ceph/               # RBD, CephFS, RGW plugins
+│   │   │   ├── iscsi/              # iSCSI plugin
+│   │   │   └── nfs/                # NFS plugin
+│   │   ├── executor/               # Operation executor
+│   │   └── reporter/               # Status/metrics reporter
+│   ├── proxy/                      # Protocol Proxy
+│   │   ├── client/                 # gRPC client to controller
+│   │   ├── gateways/               # Protocol gateway implementations
+│   │   │   ├── nfs/                # NFS server (serves any backend as NFS)
+│   │   │   ├── smb/                # SMB/CIFS server
+│   │   │   ├── webdav/             # WebDAV server
+│   │   │   ├── s3/                 # S3 gateway (serves non-S3 as S3)
+│   │   │   └── ftp/                # FTP/SFTP server
+│   │   ├── backends/               # Backend connectors for proxy
+│   │   │   ├── ceph.go             # Connect to Ceph
+│   │   │   ├── s3.go               # Connect to S3
+│   │   │   └── local.go            # Local filesystem
+│   │   └── config/                 # Proxy configuration
+│   └── provisioner/                # Orchestration Provisioner
+│       ├── client/                 # gRPC client to controller
+│       ├── kubernetes/             # Kubernetes provisioning
+│       │   ├── csi/                # CSI driver implementation
+│       │   ├── pv.go               # PersistentVolume management
+│       │   ├── pvc.go              # PersistentVolumeClaim handling
+│       │   └── storageclass.go     # StorageClass management
+│       ├── lxd/                    # LXD provisioning
+│       │   ├── pool.go             # Storage pool management
+│       │   ├── volume.go           # Volume provisioning
+│       │   └── profile.go          # Profile storage config
+│       └── common/                 # Shared provisioning logic
+├── pkg/                            # Shared packages
+│   ├── licensing/                  # License client (from existing)
+│   ├── database/                   # Database layer (from existing)
+│   ├── grpc/                       # gRPC utilities, mTLS
+│   └── metrics/                    # Prometheus metrics
+├── api/
+│   ├── proto/                      # Protocol Buffers
+│   │   ├── agent.proto             # Agent service definition
+│   │   ├── storage.proto           # Storage operations
+│   │   └── config.proto            # Configuration sync
+│   └── openapi/controller.yaml     # REST API spec
+├── web/                            # WebUI (React SPA)
+│   ├── src/
+│   │   ├── components/             # React components
+│   │   ├── services/api.ts         # Controller API client
+│   │   └── App.tsx
+│   ├── nginx/nginx.conf            # SPA routing
+│   └── Dockerfile
+├── deployments/
+│   ├── docker/
+│   │   ├── controller/Dockerfile
+│   │   ├── agent/Dockerfile
+│   │   └── webui/Dockerfile
+│   ├── kubernetes/                 # K8s manifests
+│   └── docker-compose.yml
+├── scripts/
+│   ├── gen-proto.sh                # Generate gRPC code
+│   └── gen-certs.sh                # Generate mTLS certs
+└── tests/
+```
+
+## Implementation Phases
+
+### Phase 1: Foundation
+- [ ] Create new directory structure
+- [ ] Set up Go modules with proper import paths
+- [ ] Create Protocol Buffer definitions (`api/proto/*.proto`)
+- [ ] Generate gRPC code (`scripts/gen-proto.sh`)
+- [ ] Migrate shared libraries to `pkg/`:
+  - [ ] `shared/licensing/` → `pkg/licensing/`
+  - [ ] `shared/database/` → `pkg/database/`
+- [ ] Create new GitHub workflows for each container
+
+### Phase 2: Controller Development
+- [ ] Implement REST API server (`internal/controller/api/`)
+  - [ ] Auth handlers (login, logout, refresh)
+  - [ ] Agent management handlers
+  - [ ] Storage operation handlers
+  - [ ] Configuration handlers
+  - [ ] Health/metrics endpoints
+- [ ] Implement JWT authentication middleware
+- [ ] Implement gRPC server (`internal/controller/grpc/`)
+  - [ ] Agent registration service
+  - [ ] Bidirectional streaming for heartbeats
+  - [ ] Configuration distribution
+  - [ ] Operation commands
+- [ ] Integrate PenguinTech license validation
+- [ ] Create database schema and migrations
+- [ ] Implement agent manager service
+
+### Phase 3: Agent Development
+- [ ] Implement gRPC client (`internal/agent/client/`)
+- [ ] Create plugin interface (`internal/agent/plugins/interface.go`)
+- [ ] Implement plugin registry (`internal/agent/plugins/registry.go`)
+- [ ] Implement storage plugins:
+  - [ ] S3/MinIO plugin (`internal/agent/plugins/s3/`)
+  - [ ] Ceph RBD plugin (`internal/agent/plugins/ceph/rbd_plugin.go`)
+  - [ ] CephFS plugin (`internal/agent/plugins/ceph/cephfs_plugin.go`)
+  - [ ] iSCSI plugin (`internal/agent/plugins/iscsi/`)
+  - [ ] NFS plugin (`internal/agent/plugins/nfs/`)
+- [ ] Implement operation executor (`internal/agent/executor/`)
+- [ ] Implement metrics reporter (`internal/agent/reporter/`)
+
+### Phase 4: Protocol Proxy Development
+- [ ] Implement proxy gRPC client (`internal/proxy/client/`)
+- [ ] Create gateway interface (`internal/proxy/gateways/interface.go`)
+- [ ] Implement protocol gateways:
+  - [ ] NFS gateway (`internal/proxy/gateways/nfs/`) - serve any backend as NFS
+  - [ ] SMB/CIFS gateway (`internal/proxy/gateways/smb/`)
+  - [ ] WebDAV gateway (`internal/proxy/gateways/webdav/`)
+  - [ ] S3 gateway (`internal/proxy/gateways/s3/`) - serve non-S3 backends as S3
+- [ ] Implement backend connectors:
+  - [ ] Ceph backend connector
+  - [ ] S3 backend connector
+  - [ ] Local filesystem connector
+- [ ] Add proxy management to Controller API
+
+### Phase 5: Orchestration Provisioner Development
+- [ ] Implement provisioner gRPC client (`internal/provisioner/client/`)
+- [ ] Kubernetes integration:
+  - [ ] CSI driver implementation (`internal/provisioner/kubernetes/csi/`)
+  - [ ] PersistentVolume provisioning
+  - [ ] StorageClass management
+  - [ ] Dynamic volume provisioning
+- [ ] LXD integration:
+  - [ ] Storage pool management (`internal/provisioner/lxd/pool.go`)
+  - [ ] Volume provisioning for containers
+  - [ ] Profile-based storage assignment
+- [ ] Add provisioner management to Controller API
+
+### Phase 6: WebUI Development
+- [ ] Set up React + TypeScript + Vite (reuse existing `web/`)
+- [ ] Implement authentication flows (login, JWT refresh)
+- [ ] Create API client service
+- [ ] Build dashboard components:
+  - [ ] Agent status overview
+  - [ ] Storage capacity visualization
+  - [ ] Protocol proxy status
+  - [ ] K8s/LXD provisioning status
+  - [ ] Real-time updates (WebSocket)
+- [ ] Build management views:
+  - [ ] Agent management
+  - [ ] Storage operations (volumes, buckets, exports)
+  - [ ] Protocol proxy configuration
+  - [ ] K8s/LXD provisioning management
+  - [ ] Configuration management
+  - [ ] Audit log viewer
+
+### Phase 7: Integration & Testing
+- [ ] Create Docker Compose for full stack
+- [ ] Write integration tests
+- [ ] Write E2E tests
+- [ ] Load testing with multiple agents
+- [ ] Security scanning (gosec, CodeQL)
+
+### Phase 8: Documentation & Deployment
+- [ ] API documentation (OpenAPI, gRPC)
+- [ ] Deployment guides
+- [ ] Update CLAUDE.md for new architecture
+
+## Key Technical Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Controller Language | Go | Performance with many agents, existing codebase patterns |
+| Agent Language | Go | Lightweight, cross-platform, existing Ceph/storage tooling |
+| Agent Communication | gRPC (bidirectional streaming) | Efficient, real-time updates, mTLS support |
+| WebUI Communication | REST + JWT | Standard web patterns, easy debugging |
+| Config Management | Centralized (Controller) | Single source of truth, easier auditing |
+| Plugin Architecture | Interface-based | Extensible, testable, supports all storage types |
+| Agent Registration | Manual + Auto-discovery | Agents self-register on startup; admin can also manually pre-register |
+| Storage Plugins | All types (S3, Ceph, NFS, iSCSI) | Full storage coverage from initial release |
+
+## Database Schema (Key Tables)
+
+- `users` - Authentication, roles (admin/operator/viewer)
+- `sessions` - JWT session management
+- `agents` - Registered storage agents
+- `agent_plugins` - Enabled plugins per agent
+- `agent_configs` - Versioned agent configuration
+- `storage_backends` - Storage backend instances
+- `storage_volumes` - Block volumes (RBD, iSCSI)
+- `storage_buckets` - S3 buckets
+- `operations` - Operation queue and history
+- `audit_logs` - Audit trail
+- `events` - Agent events
+- `agent_metrics` - Time-series metrics
+
+## Critical Files to Modify/Create
+
+### Reusable Existing Code
+- `/home/penguin/code/Nest/shared/licensing/client.go` → `pkg/licensing/`
+- `/home/penguin/code/Nest/shared/database/postgres.go` → `pkg/database/`
+- `/home/penguin/code/Nest/shared/database/redis.go` → `pkg/database/`
+- `/home/penguin/code/Nest/apps/api/main.go` - Patterns for Controller
+- `/home/penguin/code/Nest/web/` - React frontend base
+
+### Files to Archive (move to `/home/penguin/code/Nest/archive/`)
+- `/home/penguin/code/Nest/apps/api/` → `archive/legacy-api/`
+- `/home/penguin/code/Nest/apps/web/` → `archive/legacy-web-python/`
+- Old `docker-compose.yml` → `archive/docker-compose.legacy.yml`
+
+**Note**: Archive for reference, do not delete. New architecture replaces all functionality.
+
+## Storage Plugin Interface
+
+```go
+type StoragePlugin interface {
+    Name() string
+    Type() string
+    Init(config map[string]string) error
+    Shutdown(ctx context.Context) error
+    HealthCheck(ctx context.Context) (*HealthStatus, error)
+    Capabilities() []Capability
+    GetStatus(ctx context.Context) (*BackendStatus, error)
+}
+
+// Extended interfaces for specific storage types
+type VolumePlugin interface { ... }      // RBD, iSCSI
+type ObjectPlugin interface { ... }      // S3, Ceph RGW
+type FileSystemPlugin interface { ... }  // CephFS, NFS
+```
+
+## Container Ports
+
+| Container | Port | Protocol | Purpose |
+|-----------|------|----------|---------|
+| WebUI | 3000 | HTTP | Nginx serving React SPA |
+| Controller | 8080 | HTTP | REST API for WebUI |
+| Controller | 9090 | gRPC | Agent/Proxy/Provisioner communication |
+| Controller | 9091 | HTTP | Prometheus metrics |
+| Agent | 8081 | HTTP | Health check |
+| Agent | 9092 | HTTP | Prometheus metrics |
+| Proxy | 8082 | HTTP | Health check |
+| Proxy | 2049 | TCP/UDP | NFS gateway |
+| Proxy | 445 | TCP | SMB/CIFS gateway |
+| Proxy | 8443 | HTTPS | WebDAV gateway |
+| Proxy | 9000 | HTTP | S3 gateway |
+| Provisioner | 8083 | HTTP | Health check |
+| Provisioner | 9093 | HTTP | Prometheus metrics |
+
+## Environment Variables
+
+### Controller
+```bash
+DATABASE_URL=postgresql://user:pass@postgres:5432/nest
+REDIS_URL=redis://:pass@redis:6379/0
+LICENSE_KEY=PENG-XXXX-XXXX-XXXX-XXXX-ABCD
+JWT_SECRET=<secure-secret>
+TLS_ENABLED=true
+```
+
+### Agent
+```bash
+AGENT_ID=unique-agent-id
+CONTROLLER_ADDRESS=controller:9090
+PLUGINS_ENABLED=s3,ceph_rbd,nfs
+S3_ENDPOINT=http://minio:9000
+CEPH_MON_HOST=mon1,mon2,mon3
+```
+
+### Protocol Proxy
+```bash
+PROXY_ID=unique-proxy-id
+CONTROLLER_ADDRESS=controller:9090
+GATEWAYS_ENABLED=nfs,smb,webdav,s3
+NFS_EXPORT_BASE=/exports
+SMB_WORKGROUP=NEST
+WEBDAV_PORT=8443
+S3_GATEWAY_PORT=9000
+# Backend connections configured via Controller
+```
+
+### Orchestration Provisioner
+```bash
+PROVISIONER_ID=unique-provisioner-id
+CONTROLLER_ADDRESS=controller:9090
+K8S_ENABLED=true
+K8S_KUBECONFIG=/etc/kubernetes/admin.conf
+K8S_NAMESPACE=nest-storage
+LXD_ENABLED=true
+LXD_SOCKET=/var/snap/lxd/common/lxd/unix.socket
+LXD_CLUSTER_ENABLED=false
+```
+
+## Implementation Strategy: Task Agents
+
+**Agent Usage Guidelines:**
+- **Maximum 10 task agents** can run concurrently
+- **Use `haiku` model** for most tasks (file creation, boilerplate, simple implementations)
+- **Use `sonnet` model** only for complex tasks (architecture decisions, intricate logic, security-critical code)
+- **CRITICAL**: Instruct all task agents to return **minimal output** - summary only, no full code dumps
+  - Example prompt suffix: "Return only a brief summary of what was done. Do not include full file contents in response."
+- Parallel agents for independent work (e.g., different plugins can be built simultaneously)
+- Sequential agents for dependent work (e.g., interface must exist before implementations)
+- **OUTPUT LOCATION**: All checklists, progress files, and temporary outputs go to `/tmp/nest-build/` - NEVER in project directory
+
+**Recommended Agent Distribution:**
+| Task | Model | Parallelizable |
+|------|-------|----------------|
+| Directory structure setup | haiku | No (foundational) |
+| Proto file generation | haiku | Yes |
+| Database schema/migrations | sonnet | No |
+| Controller REST handlers | haiku | Yes (per handler group) |
+| Controller gRPC server | sonnet | No |
+| Agent plugin interface | sonnet | No (defines contract) |
+| Individual storage plugins | haiku | Yes (all 4 in parallel) |
+| Protocol gateway interface | sonnet | No (defines contract) |
+| Individual gateways (NFS, SMB, WebDAV) | haiku | Yes (in parallel) |
+| K8s CSI driver | sonnet | No (complex) |
+| LXD provisioner | haiku | Yes (parallel with K8s) |
+| WebUI components | haiku | Yes |
+| Integration tests | sonnet | No |
+
+## Risk Mitigation
+
+1. **Data Migration**: Create migration scripts before removing old services
+2. **Rollback Plan**: Keep old containers available during transition
+3. **Agent Compatibility**: Version agent-controller protocol for future upgrades
+4. **Security**: mTLS for all agent communication, JWT for WebUI
+5. **Context Management**: Task agents return minimal output to prevent context overflow

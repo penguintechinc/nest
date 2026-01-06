@@ -1,612 +1,1042 @@
-# Nest Project Development & CI/CD Standards
+# Development Standards
 
-This document outlines the standardized practices, code quality requirements, and CI/CD compliance standards for the Nest project.
+This document consolidates all development standards, patterns, and requirements for the Nest project, built on Penguin Tech Inc template best practices.
 
-## Table of Contents
+---
 
-1. [Version Management](#version-management)
-2. [Code Quality Standards](#code-quality-standards)
-3. [Security Standards](#security-standards)
-4. [Testing Standards](#testing-standards)
-5. [CI/CD Compliance](#cicd-compliance)
-6. [Language-Specific Standards](#language-specific-standards)
-7. [Documentation Standards](#documentation-standards)
-8. [Release Process](#release-process)
+## Language Selection Criteria
 
-## Version Management
+**Evaluate on a case-by-case basis which language to use for each project or service:**
 
-### Version File Format
+### Python 3.13 (Default Choice)
+**Use Python for most applications:**
+- Web applications and REST APIs
+- Business logic and data processing
+- Integration services and connectors
+- CRUD applications
+- Admin panels and internal tools
+- Low to moderate traffic applications (<10K req/sec)
 
-All releases use semantic versioning with build timestamp: `vMajor.Minor.Patch.build`
+**Advantages:**
+- Rapid development and iteration
+- Rich ecosystem of libraries
+- Excellent for prototyping and MVPs
+- Strong support for data processing
+- Easy maintenance and debugging
+
+### Go 1.23.x (Performance-Critical Only)
+**Use Go ONLY for high-traffic, performance-critical applications:**
+- Applications handling >10K requests/second
+- Network-intensive services requiring low latency
+- Services with latency requirements <10ms
+- CPU-bound operations requiring maximum throughput
+- Systems requiring minimal memory footprint
+- Real-time processing pipelines
+
+**Traffic Threshold Decision Matrix:**
+| Requests/Second | Language Choice | Rationale |
+|-----------------|-----------------|-----------|
+| < 1K req/sec    | Python 3.13     | Development speed priority |
+| 1K - 10K req/sec| Python 3.13     | Python can handle with optimization |
+| 10K - 50K req/sec| Evaluate both  | Consider complexity vs performance needs |
+| > 50K req/sec   | Go 1.23.x       | Performance becomes critical |
+
+**Important Considerations:**
+- Start with Python for faster iteration
+- Profile and measure actual performance before switching
+- Consider operational complexity of multi-language stack
+- Go adds development overhead - only use when necessary
+
+---
+
+## Flask-Security-Too Integration
+
+**MANDATORY for ALL Flask applications - provides comprehensive security framework**
+
+### Core Features
+- User authentication and session management
+- Role-based access control (RBAC)
+- Password hashing with bcrypt
+- Email confirmation and password reset
+- Two-factor authentication (2FA)
+- Token-based authentication for APIs
+- Login tracking and session management
+
+### Integration with PyDAL
+
+Flask-Security-Too integrates with PyDAL for database operations:
+
+```python
+from flask import Flask
+from flask_security import Security, auth_required, hash_password
+from flask_security.datastore import DataStore, UserDataMixin, RoleDataMixin
+from pydal import DAL, Field
+import os
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
+app.config['SECURITY_PASSWORD_SALT'] = os.getenv('SECURITY_PASSWORD_SALT', 'salt')
+app.config['SECURITY_REGISTERABLE'] = True
+app.config['SECURITY_SEND_REGISTER_EMAIL'] = False
+app.config['SECURITY_PASSWORD_HASH'] = 'bcrypt'
+
+# PyDAL database setup
+db = DAL(
+    f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@"
+    f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}",
+    pool_size=10,
+    migrate=True
+)
+
+# Define user and role tables
+db.define_table('auth_user',
+    Field('email', 'string', requires=IS_EMAIL(), unique=True),
+    Field('username', 'string', unique=True),
+    Field('password', 'string'),
+    Field('active', 'boolean', default=True),
+    Field('fs_uniquifier', 'string', unique=True),
+    Field('confirmed_at', 'datetime'),
+    migrate=True
+)
+
+db.define_table('auth_role',
+    Field('name', 'string', unique=True),
+    Field('description', 'text'),
+    migrate=True
+)
+
+db.define_table('auth_user_roles',
+    Field('user_id', 'reference auth_user'),
+    Field('role_id', 'reference auth_role'),
+    migrate=True
+)
+
+# Custom PyDAL datastore for Flask-Security-Too
+class PyDALUserDatastore(DataStore):
+    def __init__(self, db, user_model, role_model):
+        self.db = db
+        self.user_model = user_model
+        self.role_model = role_model
+
+    def put(self, model):
+        self.db.commit()
+        return model
+
+    def delete(self, model):
+        self.db(self.user_model.id == model.id).delete()
+        self.db.commit()
+
+    def find_user(self, **kwargs):
+        query = self.db(self.user_model)
+        for key, value in kwargs.items():
+            if hasattr(self.user_model, key):
+                query = query(self.user_model[key] == value)
+        row = query.select().first()
+        return row
+
+# Initialize Flask-Security-Too
+user_datastore = PyDALUserDatastore(db, db.auth_user, db.auth_role)
+security = Security(app, user_datastore)
+
+# Protected route example
+@app.route('/api/protected')
+@auth_required()
+def protected_endpoint():
+    return {'message': 'Access granted', 'user': current_user.email}
+
+# Admin-only route example
+@app.route('/api/admin')
+@auth_required()
+@roles_required('admin')
+def admin_endpoint():
+    return {'message': 'Admin access granted'}
+```
+
+### SSO Integration (Enterprise Feature)
+
+**ALWAYS license-gate SSO as an enterprise-only feature:**
+
+```python
+from shared.licensing import requires_feature
+from flask_security import auth_required
+
+@app.route('/auth/saml/login')
+@requires_feature('sso_saml')
+def saml_login():
+    """SAML SSO login - enterprise feature"""
+    # SAML authentication logic
+    pass
+
+@app.route('/auth/oauth/login')
+@requires_feature('sso_oauth')
+def oauth_login():
+    """OAuth SSO login - enterprise feature"""
+    # OAuth authentication logic
+    pass
+```
+
+**SSO Configuration:**
+```python
+# Enterprise SSO features (license-gated)
+if license_client.has_feature('sso_saml'):
+    app.config['SECURITY_SAML_ENABLED'] = True
+    app.config['SECURITY_SAML_IDP_METADATA_URL'] = os.getenv('SAML_IDP_METADATA_URL')
+
+if license_client.has_feature('sso_oauth'):
+    app.config['SECURITY_OAUTH_ENABLED'] = True
+    app.config['SECURITY_OAUTH_PROVIDERS'] = {
+        'google': {
+            'client_id': os.getenv('GOOGLE_CLIENT_ID'),
+            'client_secret': os.getenv('GOOGLE_CLIENT_SECRET'),
+        },
+        'azure': {
+            'client_id': os.getenv('AZURE_CLIENT_ID'),
+            'client_secret': os.getenv('AZURE_CLIENT_SECRET'),
+        }
+    }
+```
+
+### Environment Variables
+
+Required environment variables for Flask-Security-Too:
+
+```bash
+# Flask-Security-Too core
+SECRET_KEY=your-secret-key-here
+SECURITY_PASSWORD_SALT=your-password-salt
+SECURITY_REGISTERABLE=true
+SECURITY_SEND_REGISTER_EMAIL=false
+
+# SSO (Enterprise only - license-gated)
+SAML_IDP_METADATA_URL=https://idp.example.com/metadata
+GOOGLE_CLIENT_ID=google-oauth-client-id
+GOOGLE_CLIENT_SECRET=google-oauth-client-secret
+AZURE_CLIENT_ID=azure-oauth-client-id
+AZURE_CLIENT_SECRET=azure-oauth-client-secret
+```
+
+---
+
+## ReactJS Frontend Standards
+
+**ALL frontend applications MUST use ReactJS**
+
+### Project Structure
+
+```
+services/webui/
+├── public/
+│   ├── index.html
+│   └── favicon.ico
+├── src/
+│   ├── components/      # Reusable components
+│   ├── pages/           # Page components
+│   ├── services/        # API client services
+│   ├── hooks/           # Custom React hooks
+│   ├── context/         # React context providers
+│   ├── utils/           # Utility functions
+│   ├── App.jsx
+│   └── index.jsx
+├── package.json
+├── Dockerfile
+└── .env
+```
+
+### Required Dependencies
+
+```json
+{
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "axios": "^1.6.0",
+    "@tanstack/react-query": "^5.0.0",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0",
+    "eslint": "^8.55.0",
+    "prettier": "^3.1.0"
+  }
+}
+```
+
+### API Client Integration
+
+**Create centralized API client for Flask backend:**
+
+```javascript
+// src/services/apiClient.js
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true, // Important for session cookies
+});
+
+// Request interceptor for auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor for error handling
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Redirect to login on unauthorized
+      localStorage.removeItem('authToken');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+### Authentication Context
+
+```javascript
+// src/context/AuthContext.jsx
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiClient } from '../services/apiClient';
+
+const AuthContext = createContext(null);
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is authenticated on mount
+    const checkAuth = async () => {
+      try {
+        const response = await apiClient.get('/auth/user');
+        setUser(response.data);
+      } catch (error) {
+        console.error('Not authenticated:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const login = async (email, password) => {
+    const response = await apiClient.post('/auth/login', { email, password });
+    setUser(response.data.user);
+    localStorage.setItem('authToken', response.data.token);
+  };
+
+  const logout = async () => {
+    await apiClient.post('/auth/logout');
+    setUser(null);
+    localStorage.removeItem('authToken');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);
+```
+
+### Component Standards
+
+**Use functional components with hooks:**
+
+```javascript
+import React, { useState, useEffect } from 'react';
+import { useUsers, useCreateUser } from '../hooks/useUsers';
+
+export const UserList = () => {
+  const { data: users, isLoading, error } = useUsers();
+  const createUser = useCreateUser();
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <div>
+      <h2>Users</h2>
+      <ul>
+        {users.map(user => (
+          <li key={user.id}>{user.name} - {user.email}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+```
+
+### Docker Configuration for React
+
+```dockerfile
+# services/webui/Dockerfile
+FROM node:18-slim AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+---
+
+## Database Standards
+
+### PyDAL Configuration - MANDATORY for ALL Python Applications
+
+ALL Python applications (web or non-web) MUST implement PyDAL database access.
+
+**Note on PyDAL Augmentation:**
+- PyDAL is the PRIMARY database abstraction layer
+- Other libraries can augment PyDAL when absolutely necessary
+- Any additional libraries must be justified and documented
+
+### Go Database Requirements
+
+When using Go for high-performance applications, MUST use a DAL supporting PostgreSQL and MySQL:
+
+**Recommended Options:**
+1. **GORM** (Preferred)
+   - Full-featured ORM
+   - Supports PostgreSQL, MySQL, SQLite, SQL Server
+   - Active maintenance and large community
+   - Auto migrations and associations
+
+2. **sqlx** (Alternative)
+   - Lightweight extension of database/sql
+   - Supports PostgreSQL, MySQL, SQLite
+   - More control, less abstraction
+   - Good for performance-critical scenarios
+
+**Example GORM Implementation:**
+```go
+package main
+
+import (
+    "os"
+    "gorm.io/driver/postgres"
+    "gorm.io/driver/mysql"
+    "gorm.io/gorm"
+)
+
+func initDB() (*gorm.DB, error) {
+    dbType := os.Getenv("DB_TYPE") // "postgres" or "mysql"
+    dsn := os.Getenv("DATABASE_URL")
+
+    var dialector gorm.Dialector
+    switch dbType {
+    case "mysql":
+        dialector = mysql.Open(dsn)
+    default: // postgres
+        dialector = postgres.Open(dsn)
+    }
+
+    db, err := gorm.Open(dialector, &gorm.Config{})
+    return db, err
+}
+```
+
+#### Environment Variables
+
+Applications MUST accept these Docker environment variables:
+- `DB_TYPE`: Database type (postgresql, mysql, sqlite, mssql, oracle, etc.)
+- `DB_HOST`: Database host/IP address
+- `DB_PORT`: Database port (default depends on DB_TYPE)
+- `DB_NAME`: Database name
+- `DB_USER`: Database username
+- `DB_PASS`: Database password
+- `DB_POOL_SIZE`: Connection pool size (default: 10)
+- `DB_MAX_RETRIES`: Maximum connection retry attempts (default: 5)
+- `DB_RETRY_DELAY`: Delay between retry attempts in seconds (default: 5)
+
+#### Database Connection Requirements
+
+1. **Wait for Database Initialization**: Application MUST wait for database to be ready
+   - Implement retry logic with exponential backoff
+   - Maximum retry attempts configurable via `DB_MAX_RETRIES`
+   - Log each connection attempt for debugging
+   - Fail gracefully with clear error messages
+
+2. **Connection Pooling**: MUST use PyDAL's built-in connection pooling
+   - Configure pool size via `DB_POOL_SIZE` environment variable
+   - Implement proper connection lifecycle management
+   - Handle connection timeouts and stale connections
+   - Monitor pool utilization via metrics
+
+3. **Database URI Construction**: Build connection string from environment variables
+   ```python
+   db_uri = f"{DB_TYPE}://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+   ```
+
+#### Thread Safety Requirements
+
+**PyDAL MUST be used in a thread-safe manner:**
+
+1. **Thread-local connections**: Each thread MUST have its own DAL instance
+   - NEVER share a single DAL instance across multiple threads
+   - Use thread-local storage (threading.local()) for per-thread DAL instances
+   - Connection pooling handles multi-threaded access automatically
+
+2. **Implementation Pattern for Threading:**
+   ```python
+   import threading
+   from pydal import DAL
+
+   # Thread-local storage for DAL instances
+   thread_local = threading.local()
+
+   def get_thread_db():
+       """Get thread-local database connection"""
+       if not hasattr(thread_local, 'db'):
+           thread_local.db = DAL(
+               db_uri,
+               pool_size=10,
+               migrate_enabled=True,
+               check_reserved=['all'],
+               lazy_tables=True
+           )
+       return thread_local.db
+
+   # Usage in threaded context
+   def worker_function():
+       db = get_thread_db()  # Each thread gets its own connection
+       # Perform database operations...
+   ```
+
+3. **Flask/WSGI Applications**: Flask already handles thread-local contexts
+   ```python
+   from flask import Flask, g
+
+   app = Flask(__name__)
+
+   def get_db():
+       """Get database connection for current request context"""
+       if 'db' not in g:
+           g.db = DAL(db_uri, pool_size=10)
+       return g.db
+
+   @app.teardown_appcontext
+   def close_db(error):
+       """Close database connection after request"""
+       db = g.pop('db', None)
+       if db is not None:
+           db.close()
+   ```
+
+---
+
+## Protocol Support
+
+**ALL applications MUST support multiple communication protocols:**
+
+### Required Protocol Support
+
+1. **REST API**: RESTful HTTP endpoints (GET, POST, PUT, DELETE, PATCH)
+   - JSON request/response format
+   - Proper HTTP status codes
+   - Resource-based URL design
+
+2. **gRPC**: High-performance RPC protocol
+   - Protocol Buffers for message serialization
+   - Bi-directional streaming support
+   - Service definitions in .proto files
+   - Health checking via gRPC health protocol
+
+3. **HTTP/1.1**: Standard HTTP protocol support
+   - Keep-alive connections
+   - Chunked transfer encoding
+   - Compression (gzip, deflate)
+
+4. **HTTP/2**: Modern HTTP protocol
+   - Multiplexing multiple requests over single connection
+   - Header compression (HPACK)
+   - Stream prioritization
+
+5. **HTTP/3 (QUIC)**: Next-generation HTTP protocol
+   - UDP-based transport with TLS 1.3
+   - Zero round-trip time (0-RTT) connection establishment
+   - Built-in encryption
+
+### Protocol Configuration via Environment Variables
+
+Applications must accept these environment variables:
+- `HTTP1_ENABLED`: Enable HTTP/1.1 (default: true)
+- `HTTP2_ENABLED`: Enable HTTP/2 (default: true)
+- `HTTP3_ENABLED`: Enable HTTP/3/QUIC (default: false)
+- `GRPC_ENABLED`: Enable gRPC (default: true)
+- `HTTP_PORT`: HTTP/REST API port (default: 8080)
+- `GRPC_PORT`: gRPC port (default: 50051)
+- `METRICS_PORT`: Prometheus metrics port (default: 9090)
+
+---
+
+## API Versioning
+
+**ALL REST APIs MUST use versioning in the URL path**
+
+### URL Structure
+
+**Required Format:** `/api/v{major}/endpoint`
 
 **Examples:**
-- `1.0.0.1737727200` - Production release with Epoch64 timestamp
-- `0.1.0` - Development release without timestamp
-- `2.3.1.1737803600` - Patch release with build metadata
+- `/api/v1/users` - User management
+- `/api/v1/auth/login` - Authentication
+- `/api/v1/organizations` - Organizations
+- `/api/v2/analytics` - Version 2 of analytics endpoint
 
-### Version Increment Rules
+**Key Rules:**
+1. **Always include version prefix** in URL path - NEVER use query parameters for versioning
+2. **Semantic versioning** for API versions: `v1`, `v2`, `v3`, etc.
+3. **Major version only** in URL - minor/patch versions are NOT in the URL
+4. **Consistent prefix** across all endpoints in a service
+5. **Version-specific** sub-resources: `/api/v1/users/{id}/profile` not `/api/v1/users/profile/{id}`
 
-| Type | Change | Example |
-|------|--------|---------|
-| Major | Breaking changes, API changes, removed features | 1.x.x → 2.0.0 |
-| Minor | New features, non-breaking enhancements | 1.0.x → 1.1.0 |
-| Patch | Bug fixes, security patches | 1.0.0 → 1.0.1 |
-| Build | Build metadata (timestamp only) | 1.0.0 → 1.0.0.1737727200 |
+### Version Lifecycle
 
-### Version File Location
+**Version Strategy:**
+- **Current Version**: Active development and fully supported
+- **Previous Version (N-1)**: Supported with bug fixes and security patches
+- **Older Versions (N-2+)**: Deprecated with deprecation warning headers
 
-- **Primary**: `.version` at project root
-- **Documentation**: `VERSION.md` (optional, should match .version)
-- **Source Code**: Injected via `-ldflags` during builds
+---
 
-## Code Quality Standards
+## Performance Best Practices
 
-### Universal Requirements
+**ALWAYS prioritize performance and stability through modern concurrency patterns**
 
-All code MUST:
-- ✅ Pass linting without exceptions
-- ✅ Include comprehensive error handling
-- ✅ Contain appropriate logging at multiple levels
-- ✅ Follow security-first design principles
-- ✅ Have unit tests covering all code paths
-- ✅ Pass CodeQL security analysis
-- ✅ Avoid hardcoded credentials or secrets
-- ✅ Use typed variables and functions
+### Python Performance Requirements
 
-### Go Standards
+#### Dataclasses with Slots - MANDATORY
 
-**Minimum Version:** Go 1.23.5+
+**ALL data structures MUST use dataclasses with slots for memory efficiency:**
 
-**Required Tools:**
-- golangci-lint
-- go fmt
-- go vet
-- staticcheck
-- gosec
-
-**Code Style:**
-```go
-// Use meaningful variable names
-// Always handle errors explicitly
-if err != nil {
-    return fmt.Errorf("operation failed: %w", err)
-}
-
-// Use interfaces for flexibility
-type Repository interface {
-    Get(ctx context.Context, id string) (*Model, error)
-}
-
-// Prefer concrete error types
-var (
-    ErrNotFound = errors.New("resource not found")
-    ErrInvalid  = errors.New("invalid input")
-)
-```
-
-**Testing Requirements:**
-- Unit tests with 80%+ coverage
-- Race detector enabled (`-race` flag)
-- Benchmark tests for performance-critical code
-- Integration tests with real services (when applicable)
-
-**Package Structure:**
-```
-cmd/
-  appname/
-    main.go
-internal/
-  pkg1/
-    types.go
-    impl.go
-pkg/
-  public/
-    interface.go
-```
-
-### Python Standards
-
-**Minimum Version:** Python 3.12+
-
-**Code Style:** PEP 8, PEP 257, PEP 484
-
-**Required Tools:**
-- black (code formatting)
-- isort (import sorting)
-- flake8 (linting)
-- mypy (type checking)
-- bandit (security)
-- pytest (testing)
-
-**Code Example:**
 ```python
-"""Module docstring describing purpose and exports."""
-
+from dataclasses import dataclass, field
 from typing import Optional, List
-from dataclasses import dataclass
-import logging
 
-logger = logging.getLogger(__name__)
-
-@dataclass
+@dataclass(slots=True, frozen=True)
 class User:
-    """Represents a system user."""
-    id: str
+    """User model with slots for 30-50% memory reduction"""
+    id: int
     name: str
     email: str
-
-def get_user(user_id: str) -> Optional[User]:
-    """Retrieve user by ID.
-
-    Args:
-        user_id: The unique user identifier
-
-    Returns:
-        User object if found, None otherwise
-
-    Raises:
-        ValueError: If user_id is empty
-    """
-    if not user_id:
-        raise ValueError("user_id cannot be empty")
-
-    logger.info(f"Fetching user: {user_id}")
-    # Implementation
+    created_at: str
+    metadata: dict = field(default_factory=dict)
 ```
 
-**Type Hints:** Mandatory for all functions and class attributes
+**Benefits of Slots:**
+- 30-50% less memory per instance
+- Faster attribute access
+- Better type safety with type hints
+- Immutability with `frozen=True`
 
-**Testing:**
-- pytest for unit tests
-- pytest-cov for coverage
-- pytest-asyncio for async tests
-- Mock external dependencies
-- No external network calls in unit tests
+#### Type Hints - MANDATORY
 
-### Node.js/TypeScript Standards
+**Comprehensive type hints are REQUIRED for all Python code:**
 
-**Minimum Version:** Node.js 18+
+```python
+from typing import Optional, List, Dict
+from collections.abc import AsyncIterator
 
-**Required Tools:**
-- ESLint (linting)
-- Prettier (formatting)
-- TypeScript (type checking)
-- Jest (testing)
-
-**Code Style:**
-```typescript
-// Always use const/let, never var
-const x = 1;
-
-// Type all function parameters and returns
-function processData(items: Item[]): Result[] {
-    return items.map(item => transform(item));
-}
-
-// Use interfaces for type definitions
-interface Config {
-    timeout: number;
-    retries: number;
-}
-
-// Prefer async/await
-async function fetchData(url: string): Promise<Data> {
-    const response = await fetch(url);
-    return response.json();
-}
+async def process_users(
+    user_ids: List[int],
+    batch_size: int = 100,
+    callback: Optional[Callable[[User], None]] = None
+) -> Dict[int, User]:
+    """Process users with full type hints"""
+    results: Dict[int, User] = {}
+    for user_id in user_ids:
+        user = await fetch_user(user_id)
+        results[user_id] = user
+        if callback:
+            callback(user)
+    return results
 ```
 
-**Testing:**
-- Jest unit tests with 80%+ coverage
-- No hardcoded test data
-- Mock external services
-- E2E tests for critical flows
+### Go Performance Requirements
+- **Goroutines**: Leverage goroutines and channels for concurrent operations
+- **Sync primitives**: Use sync.Pool, sync.Map for concurrent data structures
+- **Context**: Proper context propagation for cancellation and timeouts
+
+---
+
+## High-Performance Networking
+
+**Evaluate on a case-by-case basis for network-intensive applications**
+
+### When to Consider XDP/AF_XDP
+
+Only evaluate XDP (eXpress Data Path) and AF_XDP for applications with extreme network requirements:
+
+**Traffic Thresholds:**
+- Standard applications: Regular socket programming (most cases)
+- High traffic (>100K packets/sec): Consider XDP/AF_XDP
+- Extreme traffic (>1M packets/sec): XDP/AF_XDP strongly recommended
+
+### XDP (eXpress Data Path)
+
+**Kernel-level packet processing:**
+- Processes packets at the earliest point in networking stack
+- Bypass most of kernel networking code
+- Can drop, redirect, or pass packets
+- Ideal for DDoS mitigation, load balancing, packet filtering
+
+### AF_XDP (Address Family XDP)
+
+**Zero-copy socket for user-space packet processing:**
+- Bypass kernel networking stack entirely
+- Direct packet access from NIC to user-space
+- Lowest latency possible for packet processing
+- More flexible than kernel XDP
+
+### Decision Matrix: Networking Implementation
+
+| Packets/Sec | Technology | Language | Justification |
+|-------------|------------|----------|---------------|
+| < 10K       | Standard sockets | Python 3.13 | Regular networking sufficient |
+| 10K - 100K  | Optimized sockets | Python/Go | Standard with optimization |
+| 100K - 500K | Consider XDP | Go + XDP | High performance needed |
+| > 500K      | XDP/AF_XDP required | Go + AF_XDP | Extreme performance critical |
+
+---
+
+## Microservices Architecture
+
+**ALWAYS use microservices architecture for application development**
+
+### Three-Container Architecture
+
+This template provides three base containers representing the core footprints:
+
+| Container | Technology | Purpose | When to Use |
+|-----------|------------|---------|-------------|
+| **flask-backend** | Flask + PyDAL | Standard APIs, auth, CRUD | <10K req/sec, business logic |
+| **go-backend** | Go + XDP/AF_XDP | High-performance networking | >10K req/sec, <10ms latency |
+| **webui** | Node.js + React | Frontend shell | All frontend applications |
+
+### Container Details
+
+1. **WebUI Container** (Node.js + React)
+   - Express server proxies API calls to backends
+   - React SPA with role-based navigation
+   - Elder-style collapsible sidebar
+   - WaddlePerf-style tab navigation
+   - Gold (amber-400) text theme
+
+2. **Flask Backend** (Flask + PyDAL)
+   - JWT authentication with bcrypt
+   - User management CRUD (Admin only)
+   - Role-based access: Admin, Maintainer, Viewer
+   - PyDAL for multi-database support
+   - Health check endpoints
+
+3. **Go Backend** (Go + XDP/AF_XDP)
+   - XDP for kernel-level packet processing
+   - AF_XDP for zero-copy user-space I/O
+   - NUMA-aware memory allocation
+   - Memory slot pools for packet buffers
+   - Prometheus metrics
+
+4. **Connector Container** (placeholder)
+   - External system integration
+   - Background job processing
+
+### Default Roles
+
+| Role | Permissions |
+|------|-------------|
+| **Admin** | Full access: user CRUD, settings, all features |
+| **Maintainer** | Read/write access to resources, no user management |
+| **Viewer** | Read-only access to resources |
+
+---
+
+## Docker Standards
+
+### Build Standards
+
+**All builds MUST be executed within Docker containers:**
+
+```bash
+# Go builds (using debian-slim)
+docker run --rm -v $(pwd):/app -w /app golang:1.23-slim go build -o bin/app
+
+# Python builds (using debian-slim)
+docker run --rm -v $(pwd):/app -w /app python:3.13-slim pip install -r requirements.txt
+```
+
+**Use multi-stage builds with debian-slim:**
+```dockerfile
+FROM golang:1.23-slim AS builder
+FROM debian:stable-slim AS runtime
+
+FROM python:3.13-slim AS builder
+FROM debian:stable-slim AS runtime
+```
+
+### Docker Compose Standards
+
+**ALWAYS create docker-compose.dev.yml for local development**
+
+**Prefer Docker networks over host ports:**
+- Minimize host port exposure
+- Only expose ports for developer access
+- Use named Docker networks for service-to-service communication
+
+---
+
+## Testing Requirements
+
+### Unit Testing
+
+**All applications MUST have comprehensive unit tests:**
+
+- **Network isolation**: Unit tests must NOT require external network connections
+- **No external dependencies**: Cannot reach databases, APIs, or external services
+- **Use mocks/stubs**: Mock all external dependencies and I/O operations
+- **KISS principle**: Keep unit tests simple, focused, and fast
+- **Test isolation**: Each test should be independent and repeatable
+- **Fast execution**: Unit tests should complete in milliseconds
+
+### Integration Testing
+
+- Test component interactions
+- Use test databases and services
+- Verify API contracts
+- Test authentication and authorization
+
+### End-to-End Testing
+
+- Test critical user workflows
+- Use staging environment
+- Verify full system integration
+
+### Performance Testing
+
+- Benchmark critical operations
+- Load testing for scalability
+- Regression testing for performance
+
+---
 
 ## Security Standards
 
 ### Input Validation
 
-**Rule:** ALL inputs from external sources MUST be validated
-
-**Examples:**
-```go
-// Go validation
-if len(id) == 0 || len(id) > 36 {
-    return errors.New("invalid id format")
-}
-
-// Python validation
-if not email or not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email):
-    raise ValueError("invalid email format")
-```
+- ALL inputs MUST have appropriate validators
+- Use framework-native validation (PyDAL validators, Go libraries)
+- Implement XSS and SQL injection prevention
+- Server-side validation for all client input
+- CSRF protection using framework native features
 
 ### Authentication & Authorization
 
-- Implement role-based access control (RBAC)
-- Never store plaintext passwords
-- Use industry-standard hashing (bcrypt minimum)
-- Implement token expiration
-- Validate permissions on every protected endpoint
+- Multi-factor authentication support
+- Role-based access control (RBAC)
+- API key management with rotation
+- JWT token validation with proper expiration
+- Session management with secure cookies
+
+### TLS/Encryption
+
+- **TLS enforcement**: TLS 1.2 minimum, prefer TLS 1.3
+- **Connection security**: Use HTTPS where possible
+- **Modern protocols**: HTTP3/QUIC for high-performance
+- **Standard security**: JWT, MFA, mTLS where applicable
+- **Enterprise SSO**: SAML/OAuth2 as enterprise features
 
 ### Dependency Security
 
-**Requirements:**
-- Check for Dependabot alerts weekly
-- Address all critical/high vulnerabilities immediately
-- Keep dependencies current (within 3 months of latest)
-- Use dependency scanning tools:
-  - Go: `go mod audit`
-  - Python: `safety check`
-  - Node.js: `npm audit`
+- **ALWAYS check for Dependabot alerts** before commits
+- **Monitor vulnerabilities** via Socket.dev
+- **Mandatory security scanning** before dependency changes
+- **Fix all security alerts immediately** - no commits with outstanding vulnerabilities
+- **Version pinning**: Exact versions for security-critical dependencies
 
-### Secrets Management
-
-**Rules:**
-- NEVER commit credentials to repository
-- Use environment variables for secrets
-- Rotate credentials regularly
-- Audit secret access
-- Use .gitignore for local secret files
-
-**Files to exclude:**
-```
-.env
-.env.local
-secrets/
-certs/private/
-```
-
-### HTTPS/TLS Requirements
-
-- Enforce TLS 1.2 minimum (prefer TLS 1.3)
-- Use valid certificates for all services
-- Implement certificate rotation
-- Regular security audits
-
-## Testing Standards
-
-### Unit Testing
-
-**Requirements:**
-- Test all exported functions
-- Cover happy path and error cases
-- Test boundary conditions
-- Isolated from external dependencies
-- Fast execution (milliseconds)
-
-**Coverage Targets:**
-- Minimum 80% code coverage
-- 100% coverage for security-critical code
-- 100% coverage for public APIs
-
-**Unit Test Structure:**
-```go
-// Go example
-func TestGetUser(t *testing.T) {
-    tests := []struct {
-        name    string
-        userID  string
-        want    *User
-        wantErr bool
-    }{
-        {
-            name:   "valid user",
-            userID: "123",
-            want:   &User{ID: "123", Name: "John"},
-        },
-        {
-            name:    "empty id",
-            userID:  "",
-            wantErr: true,
-        },
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            // Test implementation
-        })
-    }
-}
-```
-
-### Integration Testing
-
-**Scope:**
-- API endpoint functionality
-- Database operations
-- Message queue integration
-- External service mocking
-
-**Execution:**
-- Run after unit tests
-- Use real database instances
-- Clean up test data
-- Handle transient failures gracefully
-
-### Performance Testing
-
-**When Required:**
-- Load-sensitive endpoints
-- Database query optimization
-- Cache performance
-
-**Tools:**
-- Go: testing.B benchmarks
-- Python: pytest-benchmark
-- Node.js: autocannon or custom
-
-## CI/CD Compliance
-
-### Build Requirements
-
-✅ **Mandatory:**
-- All code must compile/parse without errors
-- All linting checks must pass
-- All tests must pass
-- Code coverage must meet thresholds
-- Security scanning must complete
-
-❌ **Prohibited:**
-- Committed build artifacts
-- Skipped failing tests
-- Disabled security checks
-- Hardcoded configuration
-
-### Pull Request Requirements
-
-Before merging to main:
-1. ✅ All CI checks pass
-2. ✅ Code review approval (minimum 1)
-3. ✅ Security scan passes
-4. ✅ Test coverage meets threshold
-5. ✅ Documentation updated
-6. ✅ Version number updated (if applicable)
-
-### Deployment Requirements
-
-**Development:**
-- Can deploy from develop branch
-- Requires passing CI
-- No production data
-
-**Production:**
-- Only from main/release branches
-- Requires successful release workflow
-- Manual approval gate
-- Change documentation required
-
-## Language-Specific Standards
-
-### Go-Specific
-
-**gofmt:** All code automatically formatted
-```bash
-gofmt -s -w .
-```
-
-**go vet:** Static analysis for correctness
-```bash
-go vet ./...
-```
-
-**golangci-lint:** Combined linting (staticcheck, gosec, etc.)
-```bash
-golangci-lint run --timeout=5m
-```
-
-**Testing with Coverage:**
-```bash
-go test -v -race -coverprofile=coverage.out ./...
-```
-
-### Python-Specific
-
-**black:** Deterministic formatting
-```bash
-black --line-length=100 .
-```
-
-**isort:** Import statement sorting
-```bash
-isort --profile black .
-```
-
-**flake8:** Style guide enforcement
-```bash
-flake8 . --max-line-length=100
-```
-
-**mypy:** Static type checking
-```bash
-mypy . --ignore-missing-imports
-```
-
-**bandit:** Security issue scanning
-```bash
-bandit -r . -f json
-```
-
-### Node.js/TypeScript-Specific
-
-**ESLint:** Code quality and patterns
-```bash
-npm run lint
-```
-
-**Prettier:** Code formatting
-```bash
-npm run format -- --check
-```
-
-**TypeScript:** Type checking
-```bash
-npm run typecheck
-```
-
-**Jest:** Unit testing
-```bash
-npm test -- --coverage
-```
+---
 
 ## Documentation Standards
 
-### Code Documentation
+### README.md Standards
 
-**Go:**
-- Every exported function/type has a comment
-- Comments are sentences starting with name
-- Packages have a doc comment
+**ALWAYS include build status badges:**
+- CI/CD pipeline status (GitHub Actions)
+- Test coverage status (Codecov)
+- Go Report Card (for Go projects)
+- Version badge
+- License badge (Limited AGPL3)
 
-```go
-// User represents a system user with authentication details.
-type User struct {
-    ID    string
-    Email string
-}
+**ALWAYS include catchy ASCII art** below badges
 
-// GetUser retrieves a user by ID from the database.
-func GetUser(ctx context.Context, id string) (*User, error) {
-```
+**Company homepage**: Point to **www.penguintech.io**
 
-**Python:**
-- Docstrings for all modules, classes, functions
-- Follow PEP 257 standard
-- Include parameter and return types
+### CLAUDE.md File Management
 
-```python
-"""user module provides user management functionality."""
-
-def get_user(user_id: str) -> Optional[User]:
-    """Retrieve a user by ID.
-
-    Args:
-        user_id: Unique user identifier
-
-    Returns:
-        User object or None if not found
-
-    Raises:
-        ValueError: If user_id is invalid
-    """
-```
-
-**TypeScript:**
-- JSDoc comments for public APIs
-- Type annotations mandatory
-- Comments for complex logic
-
-### Project Documentation
-
-**Required Files:**
-- README.md (overview and quick start)
-- CONTRIBUTING.md (contribution guidelines)
-- docs/WORKFLOWS.md (this file)
-- docs/STANDARDS.md (standards documentation)
-- CHANGELOG.md (version history)
-
-**README Contents:**
-- Build status badges
-- Quick start guide
-- Architecture overview
-- Installation instructions
-- License information
+- **Maximum**: 35,000 characters
+- **High-level approach**: Reference detailed docs
+- **Documentation strategy**: Create detailed docs in `docs/` folder
+- **Keep focused**: Critical context and workflow instructions only
 
 ### API Documentation
 
-- OpenAPI/Swagger specifications
+- Comprehensive endpoint documentation
 - Request/response examples
+- Error codes and handling
 - Authentication requirements
-- Rate limiting details
-- Error codes and meanings
+- Rate limiting information
 
-## Release Process
+### Architecture Documentation
 
-### Version Bump Procedure
+- System architecture diagrams
+- Component interaction patterns
+- Data flow documentation
+- Decision records (ADRs)
 
-1. **Update .version file**
-   ```bash
-   # Check current version
-   cat .version
+---
 
-   # For patch release
-   ./scripts/version/update-version.sh patch
+## Web UI Design Standards
 
-   # For minor release
-   ./scripts/version/update-version.sh minor
+**ALL ReactJS frontend applications MUST follow these design patterns:**
 
-   # For major release
-   ./scripts/version/update-version.sh major
-   ```
+### Design Philosophy
 
-2. **Update documentation**
-   - Update VERSION.md
-   - Update CHANGELOG.md with changes
-   - Update installation instructions if needed
+- **Dark Theme Default**: Use dark backgrounds with light text for reduced eye strain
+- **Consistent Spacing**: Use standardized spacing scale (Tailwind's spacing utilities)
+- **Smooth Transitions**: Apply `transition-colors` or `transition-all 0.2s` for state changes
+- **Subtle Gradients**: Use gradient accents sparingly for modern aesthetic
+- **Responsive Design**: Mobile-first approach with breakpoint-based layouts
 
-3. **Create pull request**
-   - Title: "Release v{version}"
-   - Description: Summary of changes
-   - Links to related issues
+### Color Palette (Dark Theme)
 
-4. **Merge to main**
-   - Require approval
-   - All CI checks must pass
+**CSS Variables (Required):**
+```css
+:root {
+  /* Background colors */
+  --bg-primary: #0f172a;      /* slate-900 - main background */
+  --bg-secondary: #1e293b;    /* slate-800 - sidebar/cards */
+  --bg-tertiary: #334155;     /* slate-700 - hover states */
 
-5. **Automatic release creation**
-   - GitHub Actions creates release automatically
-   - Release notes generated from CHANGELOG
-   - Pre-release tag applied
+  /* Text colors - Gold default */
+  --text-primary: #fbbf24;    /* amber-400 - headings, primary text */
+  --text-secondary: #f59e0b;  /* amber-500 - body text */
+  --text-muted: #d97706;      /* amber-600 - secondary/muted text */
+  --text-light: #fef3c7;      /* amber-100 - high contrast text */
 
-### Release Candidate Process
+  /* Accent colors (sky-blue for interactive elements) */
+  --primary-400: #38bdf8;
+  --primary-500: #0ea5e9;
+  --primary-600: #0284c7;
+  --primary-700: #0369a1;
 
-For major releases, use release candidates:
+  /* Border colors */
+  --border-color: #334155;    /* slate-700 */
 
-1. **Branch:** Create `release/v1.0.0-rc1` from develop
-2. **Testing:** Extended testing period (1-2 weeks)
-3. **Bug fixes:** Apply only critical bug fixes
-4. **Release:** When stable, merge to main with version bump
-5. **Promotion:** Release → Release (GA) once stable in production
+  /* Admin/Warning accent */
+  --warning-color: #eab308;   /* yellow-500 */
+}
+```
 
-## Compliance Checklist
+---
 
-Before committing code:
-- ✅ All files pass linting
-- ✅ All tests pass locally
-- ✅ Code coverage meets threshold
-- ✅ Security scan passes locally
-- ✅ No hardcoded secrets
-- ✅ Error handling complete
-- ✅ Logging appropriate
-- ✅ Documentation updated
-- ✅ Related issues linked
-- ✅ Version file updated (if applicable)
+## WaddleAI Integration
 
-Before merging pull request:
-- ✅ CI pipeline fully passes
-- ✅ Code review approved
-- ✅ Security scan passes
-- ✅ Test coverage meets threshold
-- ✅ No merge conflicts
-- ✅ Documentation complete
-- ✅ Changelog updated
+**Optional AI capabilities - integrate only when AI features are required**
 
-## Tools Reference
+### When to Use WaddleAI
 
-| Tool | Language | Purpose | Command |
-|------|----------|---------|---------|
-| golangci-lint | Go | Linting | `golangci-lint run` |
-| gosec | Go | Security | `gosec ./...` |
-| black | Python | Formatting | `black .` |
-| bandit | Python | Security | `bandit -r .` |
-| mypy | Python | Type checking | `mypy .` |
-| ESLint | Node.js | Linting | `npm run lint` |
-| Prettier | Node.js | Formatting | `npm run format` |
-| Jest | All | Testing | `npm test` |
+Consider WaddleAI integration for projects requiring:
+- Natural language processing (NLP)
+- Machine learning model inference
+- AI-powered features and automation
+- Intelligent data analysis
+- Chatbots and conversational interfaces
+- Document understanding and extraction
+- Predictive analytics
 
-## References
+### License-Gating AI Features
 
-- [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
-- [PEP 8 Style Guide](https://www.python.org/dev/peps/pep-0008/)
-- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [OWASP Secure Coding](https://owasp.org/www-project-secure-coding-practices-quick-reference-guide/)
-- [Semantic Versioning](https://semver.org/)
+**ALWAYS make AI features enterprise-only:**
+
+```python
+# License configuration
+AI_FEATURES = {
+    'ai_analysis': 'professional',      # Professional tier+
+    'ai_generation': 'professional',    # Professional tier+
+    'ai_training': 'enterprise',        # Enterprise tier only
+    'ai_custom_models': 'enterprise'    # Enterprise tier only
+}
+
+# Feature checking
+from shared.licensing import license_client
+
+def check_ai_features():
+    """Check available AI features based on license"""
+    features = {}
+    for feature, required_tier in AI_FEATURES.items():
+        features[feature] = license_client.has_feature(feature)
+    return features
+```
+
+---
+
+## Nest-Specific Standards
+
+### Networking Stack
+
+The Nest project specializes in high-performance networking and infrastructure:
+
+**Performance Requirements:**
+- Optimize for <10ms latency where possible
+- Support >10K concurrent connections
+- Handle high-volume packet processing efficiently
+- Implement monitoring for network metrics
+- Profile and optimize hot paths regularly
+
+**Networking Patterns:**
+- Use Go for networking components requiring extreme performance
+- Python for network control planes and APIs
+- React for UI/monitoring dashboards
+- XDP/AF_XDP for packet processing when needed
+
+**Integration Points:**
+- Monitor HTTP/REST API performance
+- Track gRPC service metrics
+- Collect network performance baselines
+- Alert on latency degradation
+
+---
+
+**Last Updated**: 2025-12-18
+**Maintained by**: Penguin Tech Inc
+**Template Version**: 1.5.0
