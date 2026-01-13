@@ -1,0 +1,17 @@
+apiVersion: v2
+name: nest
+description: Comprehensive networking and infrastructure platform with multi-language support
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - nest
+  - networking
+  - infrastructure
+  - microservices
+home: https://www.penguintech.io
+sources:
+  - https://github.com/penguintech/nest
+maintainers:
+  - name: Penguin Tech Inc
+    email: support@penguintech.io

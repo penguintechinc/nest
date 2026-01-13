@@ -1,0 +1,378 @@
+# Nest Helm Chart Values
+# Environment-specific configurations: dev, staging, prod
+
+# Override chart name and full name
+nameOverride: ""
+fullnameOverride: ""
+
+# Global configuration
+global:
+  environment: dev
+  domain: nest.local
+  region: us-east-1
+
+# Application deployment
+app:
+  name: nest
+  replicaCount: 1
+
+  image:
+    repository: penguintech/nest
+    pullPolicy: IfNotPresent
+    tag: "1.0.0"
+
+  imagePullSecrets: []
+
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - NET_BIND_SERVICE
+
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    annotations: {}
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: nest.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: nest-tls
+        hosts:
+          - nest.local
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 125m
+      memory: 256Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Persistent volume for application data
+  persistence:
+    enabled: false
+    storageClassName: "standard"
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    mountPath: /data
+
+# Application Configuration
+config:
+  # Flask/Python app settings
+  flask:
+    debug: false
+    logLevel: INFO
+    environment: production
+
+  # License server configuration
+  license:
+    serverUrl: "https://license.penguintech.io"
+    enabled: true
+    cacheExpiry: 86400
+
+  # Monitoring
+  monitoring:
+    metricsEnabled: true
+    metricsPort: 8000
+    metricsPath: "/metrics"
+
+  # Security
+  security:
+    corsEnabled: true
+    corsOrigins: "*"
+    tlsEnabled: true
+
+# Environment-specific secrets
+secrets:
+  create: true  # Enable secret creation
+  # Database credentials
+  database:
+    create: true
+    username: nest_user
+    # password: will be injected via external secrets or sealed secrets
+    # connection string: postgresql://user:pass@host:5432/nest
+
+  # Redis/Valkey credentials
+  cache:
+    create: true
+    # password: will be injected via external secrets
+
+  # License server credentials
+  license:
+    apiKey: ""  # Set via sealed secrets
+
+  # Application secret key
+  app:
+    secretKey: ""  # Set via sealed secrets
+
+# Database configuration
+database:
+  type: postgresql  # Options: postgresql, mysql, mariadb
+  enabled: true
+  useExternal: true  # Set to false to deploy PostgreSQL in cluster
+
+  # PostgreSQL StatefulSet (if useExternal: false)
+  postgresql:
+    enabled: false
+    image:
+      repository: postgres
+      tag: "16-alpine"
+    replicaCount: 1
+    storage:
+      size: 20Gi
+      storageClassName: "standard"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+    environment:
+      POSTGRES_DB: nest
+      POSTGRES_USER: nest_user
+      # POSTGRES_PASSWORD: set via secrets
+
+  # External database connection
+  externalConnection:
+    host: postgres.default.svc.cluster.local
+    port: 5432
+    database: nest
+    username: nest_user
+    # password: set via secrets
+
+# Cache (Redis/Valkey) configuration
+cache:
+  enabled: true
+  useExternal: true  # Set to false to deploy Redis in cluster
+
+  # Redis/Valkey StatefulSet (if useExternal: false)
+  redis:
+    enabled: false
+    image:
+      repository: redis
+      tag: "7-alpine"
+    replicaCount: 1
+    storage:
+      size: 5Gi
+      storageClassName: "standard"
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 125m
+        memory: 256Mi
+    tls:
+      enabled: false
+      certSecret: redis-tls
+
+  # External cache connection
+  externalConnection:
+    host: redis.default.svc.cluster.local
+    port: 6379
+    # password: set via secrets
+    # tls enabled connection
+    tls: false
+
+# Monitoring - Prometheus ServiceMonitor
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+      labels:
+        prometheus: "kube-prometheus"
+
+  # Grafana dashboards
+  grafana:
+    enabled: true
+    dashboards:
+      enabled: true
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Environment-specific overrides
+environments:
+  dev:
+    replicaCount: 1
+    image:
+      tag: "latest"
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    ingress:
+      enabled: true
+      hosts:
+        - host: nest-dev.local
+          paths:
+            - path: /
+              pathType: Prefix
+    config:
+      flask:
+        debug: true
+        logLevel: DEBUG
+      monitoring:
+        metricsEnabled: true
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 1
+
+  staging:
+    replicaCount: 2
+    image:
+      tag: "v1.0.0"
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    ingress:
+      enabled: true
+      hosts:
+        - host: nest-staging.local
+          paths:
+            - path: /
+              pathType: Prefix
+    config:
+      flask:
+        debug: false
+        logLevel: INFO
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+
+  prod:
+    replicaCount: 3
+    image:
+      tag: "v1.0.0"
+      pullPolicy: Always
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        nginx.ingress.kubernetes.io/rate-limit: "100"
+      hosts:
+        - host: nest.penguintech.io
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: nest-prod-tls
+          hosts:
+            - nest.penguintech.io
+    config:
+      flask:
+        debug: false
+        logLevel: WARN
+      license:
+        enabled: true
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 2

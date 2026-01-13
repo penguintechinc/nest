@@ -1,0 +1,130 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nest-app
+  namespace: nest
+  labels:
+    app: nest
+    component: application
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: nest
+      component: application
+  template:
+    metadata:
+      labels:
+        app: nest
+        component: application
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+      - name: wait-for-redis
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
+      containers:
+      - name: nest-app
+        image: ghcr.io/penguincloud/core:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nest-config
+              key: DATABASE_URL
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: nest-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nest-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nest-config
+              key: REDIS_URL
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nest-secrets
+              key: REDIS_PASSWORD
+        - name: LICENSE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nest-secrets
+              key: LICENSE_KEY
+        - name: PRODUCT_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: nest-config
+              key: PRODUCT_NAME
+        - name: LICENSE_SERVER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nest-config
+              key: LICENSE_SERVER_URL
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: nest-config
+              key: PORT
+        - name: GIN_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: nest-config
+              key: GIN_MODE
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: nest-config
+              key: LOG_LEVEL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: nest-secrets
+              key: JWT_SECRET
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: nest-secrets
+              key: SESSION_SECRET
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3

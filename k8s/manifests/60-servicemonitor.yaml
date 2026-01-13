@@ -1,0 +1,170 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nest-app
+  namespace: nest-dev
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: application
+  endpoints:
+    - port: http
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres
+  namespace: nest-dev
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: database
+  endpoints:
+    - port: postgres
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis
+  namespace: nest-dev
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: cache
+  endpoints:
+    - port: redis
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nest-app
+  namespace: nest-staging
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: application
+  endpoints:
+    - port: http
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres
+  namespace: nest-staging
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: database
+  endpoints:
+    - port: postgres
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis
+  namespace: nest-staging
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: cache
+  endpoints:
+    - port: redis
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nest-app
+  namespace: nest-prod
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: application
+  endpoints:
+    - port: http
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres
+  namespace: nest-prod
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: database
+  endpoints:
+    - port: postgres
+      interval: 30s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis
+  namespace: nest-prod
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+      component: cache
+  endpoints:
+    - port: redis
+      interval: 30s
+      path: /metrics

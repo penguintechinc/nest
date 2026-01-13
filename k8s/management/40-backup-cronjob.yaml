@@ -1,0 +1,140 @@
+---
+# ServiceAccount for backup operations
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-manager
+  namespace: nest-management
+  labels:
+    app: nest
+    component: backup
+
+---
+# Role for backup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backup-manager
+  namespace: nest-management
+  labels:
+    app: nest
+    component: backup
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "persistentvolumeclaims"]
+    verbs: ["get", "list"]
+
+---
+# RoleBinding for backup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backup-manager
+  namespace: nest-management
+  labels:
+    app: nest
+    component: backup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backup-manager
+subjects:
+  - kind: ServiceAccount
+    name: backup-manager
+    namespace: nest-management
+
+---
+# CronJob for database backup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: nest-management
+  labels:
+    app: nest
+    component: backup
+spec:
+  schedule: "0 2 * * *"  # 2 AM daily
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: nest
+            component: backup
+        spec:
+          serviceAccountName: backup-manager
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:15-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  BACKUP_DIR="/backup/db-$(date +%Y%m%d-%H%M%S)"
+                  mkdir -p "$BACKUP_DIR"
+
+                  # Source database credentials from secret
+                  export PGHOST="${DB_HOST:-postgres}"
+                  export PGPORT="${DB_PORT:-5432}"
+                  export PGUSER="${DB_USER:-postgres}"
+                  export PGPASSWORD="${DB_PASSWORD}"
+                  export PGDATABASE="${DB_NAME:-nest}"
+
+                  # Perform backup
+                  pg_dump -F c -b -v -f "$BACKUP_DIR/database.dump"
+
+                  # Keep last 7 days of backups
+                  find /backup -maxdepth 1 -type d -name "db-*" -mtime +7 -exec rm -rf {} \; 2>/dev/null || true
+
+                  echo "Backup completed: $BACKUP_DIR"
+              env:
+                - name: DB_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-credentials
+                      key: host
+                      optional: true
+                - name: DB_PORT
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-credentials
+                      key: port
+                      optional: true
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-credentials
+                      key: user
+                      optional: true
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-credentials
+                      key: password
+                      optional: true
+                - name: DB_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-credentials
+                      key: database
+                      optional: true
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+              resources:
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+                requests:
+                  cpu: 200m
+                  memory: 256Mi
+          volumes:
+            - name: backup-storage
+              emptyDir: {}  # Replace with PVC for persistent storage in production

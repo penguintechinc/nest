@@ -1,0 +1,70 @@
+# Ceph RBD Storage Configuration for Nest Development Environment
+# This file configures Ceph RBD storage class and persistent volume claims
+
+# Ceph Cluster Configuration
+ceph:
+  enabled: true
+  clusterName: "ceph-cluster"
+  monitors:
+    - "ceph-mon-1:6789"
+    - "ceph-mon-2:6789"
+    - "ceph-mon-3:6789"
+  namespace: "ceph"
+  # Reference to Ceph cluster configuration
+  clusterConfigMap: "ceph-config"
+
+# Storage Class Configuration for RBD
+storageClass:
+  enabled: true
+  name: "ceph-rbd"
+  provisioner: "ceph.com/rbd"
+  parameters:
+    # Ceph cluster reference
+    monitors: "ceph-mon-1:6789,ceph-mon-2:6789,ceph-mon-3:6789"
+    adminId: "admin"
+    adminSecretName: "ceph-secret"
+    adminSecretNamespace: "ceph"
+    pool: "rbd-pool"
+    userId: "kube"
+    userSecretName: "ceph-user-secret"
+    userSecretNamespace: "ceph"
+    fstype: "ext4"
+    imageFormat: "2"
+    imageFeatures: "layering"
+  allowVolumeExpansion: true
+  reclaimPolicy: "Delete"
+  volumeBindingMode: "Immediate"
+
+# Persistent Volume Claims for Development Environment
+persistentVolumeClaims:
+  # PostgreSQL storage
+  postgres:
+    enabled: true
+    size: "10Gi"
+    storageClassName: "ceph-rbd"
+    accessModes:
+      - ReadWriteOnce
+
+  # Redis cache storage
+  redis:
+    enabled: true
+    size: "5Gi"
+    storageClassName: "ceph-rbd"
+    accessModes:
+      - ReadWriteOnce
+
+  # Application logs storage
+  logs:
+    enabled: true
+    size: "200Gi"
+    storageClassName: "ceph-rbd"
+    accessModes:
+      - ReadWriteOnce
+
+  # User uploads and file storage
+  uploads:
+    enabled: true
+    size: "500Gi"
+    storageClassName: "ceph-rbd"
+    accessModes:
+      - ReadWriteOnce

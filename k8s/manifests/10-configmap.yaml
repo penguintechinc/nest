@@ -1,0 +1,121 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nest-config
+  namespace: nest-dev
+  labels:
+    app: nest
+    component: config
+data:
+  # Database Configuration
+  POSTGRES_DB: "project_template"
+  POSTGRES_PORT: "5432"
+  DATABASE_URL: "postgresql://postgres:PASSWORD_PLACEHOLDER@postgres:5432/project_template?sslmode=disable"
+
+  # Redis Configuration
+  REDIS_PORT: "6379"
+  REDIS_URL: "redis://:PASSWORD_PLACEHOLDER@redis:6379/0"
+
+  # Application Configuration
+  PRODUCT_NAME: "nest"
+  LICENSE_SERVER_URL: "https://license.penguintech.io"
+
+  # API Service Configuration
+  PORT: "8080"
+  GIN_MODE: "debug"
+  LOG_LEVEL: "info"
+
+  # Python Web Configuration
+  PY4WEB_HOST: "0.0.0.0"
+  PY4WEB_PORT: "8000"
+  PY4WEB_APPS_FOLDER: "/app/apps"
+
+  # Node.js Configuration
+  NODE_ENV: "development"
+  NODE_PORT: "3000"
+
+  # Security Configuration
+  BCRYPT_ROUNDS: "12"
+  JWT_EXPIRATION: "24h"
+  CORS_ORIGINS: "http://localhost:3000,http://localhost:8000,http://localhost:8080"
+
+  # Monitoring Configuration
+  METRICS_ENABLED: "true"
+
+  # Cache Configuration
+  CACHE_TTL: "300"
+  CACHE_MAX_SIZE: "1000"
+
+  # Performance Configuration
+  MAX_CONNECTIONS: "100"
+  CONNECTION_TIMEOUT: "30s"
+  IDLE_TIMEOUT: "15m"
+  READ_TIMEOUT: "10s"
+  WRITE_TIMEOUT: "10s"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nest-config
+  namespace: nest-staging
+  labels:
+    app: nest
+    component: config
+data:
+  POSTGRES_DB: "project_template"
+  POSTGRES_PORT: "5432"
+  DATABASE_URL: "postgresql://postgres:PASSWORD_PLACEHOLDER@postgres:5432/project_template?sslmode=require"
+  REDIS_PORT: "6379"
+  REDIS_URL: "redis://:PASSWORD_PLACEHOLDER@redis:6379/0"
+  PRODUCT_NAME: "nest"
+  LICENSE_SERVER_URL: "https://license.penguintech.io"
+  PORT: "8080"
+  GIN_MODE: "release"
+  LOG_LEVEL: "warn"
+  PY4WEB_HOST: "0.0.0.0"
+  PY4WEB_PORT: "8000"
+  PY4WEB_APPS_FOLDER: "/app/apps"
+  NODE_ENV: "staging"
+  NODE_PORT: "3000"
+  BCRYPT_ROUNDS: "12"
+  JWT_EXPIRATION: "24h"
+  CORS_ORIGINS: "https://staging.example.com"
+  METRICS_ENABLED: "true"
+  CACHE_TTL: "600"
+  CACHE_MAX_SIZE: "5000"
+  MAX_CONNECTIONS: "200"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nest-config
+  namespace: nest-prod
+  labels:
+    app: nest
+    component: config
+data:
+  POSTGRES_DB: "project_template"
+  POSTGRES_PORT: "5432"
+  DATABASE_URL: "postgresql://postgres:PASSWORD_PLACEHOLDER@postgres:5432/project_template?sslmode=require"
+  REDIS_PORT: "6379"
+  REDIS_URL: "redis://:PASSWORD_PLACEHOLDER@redis:6379/0"
+  PRODUCT_NAME: "nest"
+  LICENSE_SERVER_URL: "https://license.penguintech.io"
+  PORT: "8080"
+  GIN_MODE: "release"
+  LOG_LEVEL: "error"
+  PY4WEB_HOST: "0.0.0.0"
+  PY4WEB_PORT: "8000"
+  PY4WEB_APPS_FOLDER: "/app/apps"
+  NODE_ENV: "production"
+  NODE_PORT: "3000"
+  BCRYPT_ROUNDS: "12"
+  JWT_EXPIRATION: "24h"
+  CORS_ORIGINS: "https://example.com"
+  METRICS_ENABLED: "true"
+  CACHE_TTL: "1800"
+  CACHE_MAX_SIZE: "10000"
+  MAX_CONNECTIONS: "500"

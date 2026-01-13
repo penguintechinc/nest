@@ -1,0 +1,17 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nest
+  namespace: nest
+  labels:
+    app: nest
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nest
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /metrics

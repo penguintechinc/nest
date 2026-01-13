@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "nest.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.app.autoscaling.enabled }}
+  replicas: {{ .Values.app.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.app.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.app.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.app.securityContext | nindent 12 }}
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: FLASK_ENV
+              value: {{ .Values.config.flask.environment }}
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: log-level
+            - name: DATABASE_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: database-type
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: database-host
+            - name: DATABASE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: database-port
+            - name: DATABASE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: database-name
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nest.fullname" . }}-secret
+                  key: database-username
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nest.fullname" . }}-secret
+                  key: database-password
+            - name: CACHE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: cache-host
+            - name: CACHE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: cache-port
+            - name: CACHE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nest.fullname" . }}-secret
+                  key: cache-password
+            - name: LICENSE_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: license-server-url
+            - name: LICENSE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nest.fullname" . }}-secret
+                  key: license-api-key
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nest.fullname" . }}-secret
+                  key: app-secret-key
+            - name: METRICS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: metrics-enabled
+            - name: CORS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nest.fullname" . }}-config
+                  key: cors-enabled
+          livenessProbe:
+            {{- toYaml .Values.app.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.app.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache
+            {{- if .Values.app.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.app.persistence.mountPath }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+        {{- if .Values.app.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "nest.fullname" . }}-pvc
+        {{- end }}
+      {{- with .Values.app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30

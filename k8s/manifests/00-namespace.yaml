@@ -1,0 +1,26 @@
+---
+# Development Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nest-dev
+  labels:
+    environment: development
+
+---
+# Staging Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nest-staging
+  labels:
+    environment: staging
+
+---
+# Production Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nest-prod
+  labels:
+    environment: production

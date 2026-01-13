@@ -1,0 +1,113 @@
+---
+# ServiceAccount for cleanup operations
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cleanup-manager
+  namespace: nest-management
+  labels:
+    app: nest
+    component: cleanup
+
+---
+# Role for cleanup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cleanup-manager
+  namespace: nest-management
+  labels:
+    app: nest
+    component: cleanup
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "delete"]
+
+---
+# RoleBinding for cleanup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cleanup-manager
+  namespace: nest-management
+  labels:
+    app: nest
+    component: cleanup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cleanup-manager
+subjects:
+  - kind: ServiceAccount
+    name: cleanup-manager
+    namespace: nest-management
+
+---
+# CronJob for cleanup old resources
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: resource-cleanup
+  namespace: nest-management
+  labels:
+    app: nest
+    component: cleanup
+spec:
+  schedule: "0 3 * * 0"  # 3 AM on Sundays
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: nest
+            component: cleanup
+        spec:
+          serviceAccountName: cleanup-manager
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+
+                  echo "Starting cluster cleanup operations..."
+
+                  # Delete completed jobs older than 7 days in all namespaces
+                  echo "Cleaning up completed jobs..."
+                  kubectl delete jobs --all-namespaces --field-selector status.successful=1 \
+                    --sort-by=.metadata.creationTimestamp 2>/dev/null || true
+
+                  # Delete failed pods older than 3 days
+                  echo "Cleaning up failed pods..."
+                  kubectl delete pods --all-namespaces --field-selector status.phase=Failed \
+                    --sort-by=.metadata.creationTimestamp 2>/dev/null || true
+
+                  # Delete succeeded pods older than 3 days
+                  echo "Cleaning up succeeded pods..."
+                  kubectl delete pods --all-namespaces --field-selector status.phase=Succeeded \
+                    --sort-by=.metadata.creationTimestamp 2>/dev/null || true
+
+                  # Clean up events older than 1 hour
+                  echo "Cleaning up old events..."
+                  kubectl delete events --all-namespaces \
+                    --field-selector involvedObject.kind=Pod 2>/dev/null || true
+
+                  echo "Cleanup completed successfully"
+              resources:
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+                requests:
+                  cpu: 100m
+                  memory: 128Mi

@@ -1,0 +1,102 @@
+# Development Environment Values
+# Override default values.yaml for development deployment
+
+global:
+  environment: dev
+  domain: nest-dev.local
+
+app:
+  replicaCount: 1
+
+  image:
+    repository: nginx
+    tag: "alpine"
+
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  securityContext:
+    readOnlyRootFilesystem: false
+
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 80
+    initialDelaySeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 80
+    initialDelaySeconds: 5
+
+  service:
+    port: 80
+    targetPort: 80
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  ingress:
+    hosts:
+      - host: nest-dev.local
+        paths:
+          - path: /
+            pathType: Prefix
+
+  livenessProbe:
+    initialDelaySeconds: 30
+
+  readinessProbe:
+    initialDelaySeconds: 10
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 1
+
+config:
+  flask:
+    debug: true
+    logLevel: DEBUG
+    environment: development
+
+  monitoring:
+    metricsEnabled: false
+
+monitoring:
+  enabled: false
+  prometheus:
+    serviceMonitor:
+      enabled: false
+
+externalSecrets:
+  enabled: false
+
+database:
+  type: postgresql
+  externalConnection:
+    host: postgres.dev.svc.cluster.local
+    port: 5432
+    database: nest_dev
+
+cache:
+  externalConnection:
+    host: redis.dev.svc.cluster.local
+    port: 6379
+
+networkPolicy:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false

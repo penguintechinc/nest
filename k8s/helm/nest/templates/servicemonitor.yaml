@@ -1,0 +1,31 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "nest.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "nest.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheus.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: {{ .Values.config.monitoring.metricsPath }}
+      interval: {{ .Values.monitoring.prometheus.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.prometheus.serviceMonitor.scrapeTimeout }}
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          action: replace
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          action: replace
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_namespace]
+          action: replace
+          targetLabel: namespace
+{{- end }}

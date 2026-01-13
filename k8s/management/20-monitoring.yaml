@@ -1,0 +1,108 @@
+---
+# ServiceMonitor for scraping cluster components
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kubernetes-apiservers
+  namespace: nest-management
+  labels:
+    app: prometheus
+    component: monitoring
+spec:
+  jobLabel: component
+  selector:
+    matchLabels:
+      component: apiserver
+      provider: kubernetes
+  namespaceSelector:
+    matchNames:
+      - default
+  endpoints:
+    - port: https
+      scheme: https
+      tlsConfig:
+        caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+
+---
+# ServiceMonitor for kubelet metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kubelet
+  namespace: nest-management
+  labels:
+    app: prometheus
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kubelet
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  endpoints:
+    - port: https-metrics
+      scheme: https
+      tlsConfig:
+        caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_node_name]
+          targetLabel: node
+
+---
+# ServiceMonitor for etcd
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: etcd
+  namespace: nest-management
+  labels:
+    app: prometheus
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      component: etcd
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  endpoints:
+    - port: client
+      scheme: https
+      tlsConfig:
+        caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+---
+# PrometheusRule for cluster health alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubernetes-alerts
+  namespace: nest-management
+  labels:
+    app: prometheus
+    component: monitoring
+spec:
+  groups:
+    - name: kubernetes.rules
+      interval: 30s
+      rules:
+        - alert: KubernetesNodeNotReady
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kubernetes node not ready (instance {{ $labels.node }})"
+            description: "Node {{ $labels.node }} has been unready for more than 5 minutes."
+
+        - alert: KubernetesPodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[15m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubernetes pod crash looping (instance {{ $labels.pod }})"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping."

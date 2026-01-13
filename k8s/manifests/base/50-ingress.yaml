@@ -1,0 +1,28 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nest-ingress
+  namespace: nest
+  labels:
+    app: nest
+    component: ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+spec:
+  tls:
+  - hosts:
+    - api.example.com
+    secretName: nest-tls
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nest-app
+            port:
+              number: 8080

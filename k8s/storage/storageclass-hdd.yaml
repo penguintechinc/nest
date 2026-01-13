@@ -1,0 +1,20 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hdd
+  namespace: default
+provisioner: ceph.rbd.csi.ceph.io
+allowVolumeExpansion: true
+parameters:
+  clusterID: ceph-cluster
+  pool: rbd-hdd
+  imageFeatures: "layering"
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+volumeBindingMode: Immediate

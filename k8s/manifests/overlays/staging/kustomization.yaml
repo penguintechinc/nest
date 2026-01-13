@@ -1,0 +1,181 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nest-staging
+
+resources:
+  - ../../base
+
+namePrefix: ""
+nameSuffix: ""
+
+labels:
+  - pairs:
+      environment: staging
+
+patches:
+  - target:
+      kind: Namespace
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: nest-staging
+  - target:
+      kind: ConfigMap
+      name: nest-config
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+      - op: replace
+        path: /data/GIN_MODE
+        value: "release"
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: "warn"
+      - op: replace
+        path: /data/DATABASE_URL
+        value: "postgresql://postgres:PASSWORD_PLACEHOLDER@postgres:5432/project_template?sslmode=require"
+      - op: replace
+        path: /data/NODE_ENV
+        value: "staging"
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: "https://staging.example.com"
+      - op: replace
+        path: /data/CACHE_TTL
+        value: "600"
+      - op: replace
+        path: /data/CACHE_MAX_SIZE
+        value: "5000"
+      - op: replace
+        path: /data/MAX_CONNECTIONS
+        value: "200"
+  - target:
+      kind: Secret
+      name: nest-secrets
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+  - target:
+      kind: Deployment
+      name: nest-app
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "1000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "200m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "400m"
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "1000m"
+  - target:
+      kind: PersistentVolumeClaim
+      name: postgres-pvc
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: "20Gi"
+  - target:
+      kind: PersistentVolumeClaim
+      name: redis-pvc
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: "10Gi"
+  - target:
+      kind: Service
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+  - target:
+      kind: Ingress
+      name: nest-ingress
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
+      - op: replace
+        path: /metadata/annotations/cert-manager.io~1cluster-issuer
+        value: letsencrypt-staging
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: "api-staging.example.com"
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: "nest-tls-staging"
+      - op: replace
+        path: /spec/rules/0/host
+        value: "api-staging.example.com"
+  - target:
+      kind: ServiceMonitor
+      name: nest
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: nest-staging
