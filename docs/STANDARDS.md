@@ -1,439 +1,144 @@
 # Development Standards
 
-This document consolidates core development standards for projects using this template. For detailed information on specific topics, refer to the linked documentation files below.
+Welcome to the Penguin Tech standards hub! 🐧 This is your go-to resource for building awesome, production-ready software.
 
-## Documentation Index
+> 🚫 **DO NOT MODIFY** this file or any files in `docs/standards/`. These are centralized template standards that will be overwritten when updated. For app-specific documentation, use [`docs/APP_STANDARDS.md`](APP_STANDARDS.md) instead.
 
-This file contains unique standards not covered elsewhere. For comprehensive coverage of specific topics, see:
+## Getting Started
 
-- **[APPLICATION_ARCHITECTURE.md](architecture/APPLICATION_ARCHITECTURE.md)** - Microservices architecture, Docker standards, protocol support, web frameworks, logging & monitoring
-- **[PERFORMANCE.md](development/PERFORMANCE.md)** - Performance best practices, concurrency patterns, high-performance networking, optimization strategies
-- **[INTEGRATION_PATTERNS.md](development/INTEGRATION_PATTERNS.md)** - Flask-Security-Too integration, WaddleAI integration, common integration patterns
-- **[CRITICAL_RULES.md](development/CRITICAL_RULES.md)** - Git workflow, licensing and feature gating, build requirements
-- **[API_VERSIONING.md](API_VERSIONING.md)** - API versioning standards, deprecation process, migration guides
-- **[DATABASE.md](DATABASE.md)** - Database standards, PyDAL configuration, connection management, thread safety
-- **[TESTING.md](TESTING.md)** - Unit testing, integration testing, E2E testing, performance testing
-- **[DOCUMENTATION.md](DOCUMENTATION.md)** - README standards, CLAUDE.md management, API documentation, architecture docs
-- **[WORKFLOWS.md](WORKFLOWS.md)** - CI/CD standards, GitHub Actions, build pipelines, security scanning
-- **[LICENSE_SERVER_INTEGRATION.md](licensing/license-server-integration.md)** - PenguinTech License Server integration guide
+Ready to build something great? Here's your quick-start checklist:
 
-## Table of Contents
+- Read your language selection criteria (Python vs Go)
+- Set up Flask-Security-Too for authentication
+- Pick your database (PostgreSQL recommended)
+- Design your APIs with versioning in mind
+- Run the pre-commit checks before pushing code
+- Make sure your tests pass (especially smoke tests!)
 
-1. [Language Selection Criteria](#language-selection-criteria)
-2. [ReactJS Frontend Standards](#reactjs-frontend-standards)
-3. [Security Standards](#security-standards)
-4. [Ansible Integration](#ansible-integration)
-5. [CI/CD Standards](#cicd-standards)
-6. [Web UI Design Standards](#web-ui-design-standards)
-7. [Quality Checklist](#quality-checklist)
+## Standards by Category
+
+Here's what you'll find in our comprehensive standards library:
+
+| Icon | Category | Focus Area |
+|------|----------|-----------|
+| 🐍 | [Language Selection](standards/LANGUAGE_SELECTION.md) | Python 3.13 or Go 1.24.x? We'll help you decide |
+| 🔐 | [Authentication](standards/AUTHENTICATION.md) | Flask-Security-Too, RBAC, SSO, password magic |
+| ⚛️ | [Frontend](standards/FRONTEND.md) | ReactJS patterns, hooks, components galore |
+| 🗄️ | [Database](standards/DATABASE.md) | PyDAL, SQLAlchemy, PostgreSQL + 3 others |
+| 🔌 | [API & Protocols](standards/API_PROTOCOLS.md) | REST, gRPC, versioning, deprecation strategies |
+| ⚡ | [Performance](standards/PERFORMANCE.md) | Dataclasses, asyncio, threading, blazing fast |
+| 🏗️ | [Architecture](standards/ARCHITECTURE.md) | Microservices, Docker, multi-arch builds |
+| ☸️ | [Kubernetes](standards/KUBERNETES.md) | Helm, Kustomize, cloud-native deployments |
+| 🧪 | [Testing](standards/TESTING.md) | Unit, integration, E2E, smoke tests |
+| 🛡️ | [Security](standards/SECURITY.md) | TLS, secrets management, vulnerability scanning |
+| 📚 | [Documentation](standards/DOCUMENTATION.md) | READMEs, release notes, keeping it clean |
+| 🎨 | [UI Design](standards/UI_DESIGN.md) | Components, patterns, responsive design |
+| 🔗 | [Integrations](standards/INTEGRATIONS.md) | WaddleAI, MarchProxy, License Server |
+
+## The Core Five (Most Important)
+
+### 1. Language Selection: Python or Go?
+Start with Python 3.13 for most applications. Go is for speed demons only (>10K req/sec). Profile first, switch only when you really need to.
+
+> **Pro tip**: 9 out of 10 times, Python will do the job beautifully and get you to market faster.
+
+[Learn more](standards/LANGUAGE_SELECTION.md)
+
+### 2. Authentication: Flask-Security-Too
+All Flask apps get security out of the box. RBAC, JWT, password reset, 2FA, even SSO for enterprise customers. Auto-creates an admin user on startup (credentials: admin@localhost.local / admin123).
+
+> **Remember**: Never skip security. It's not "nice to have" - it's required.
+
+[Learn more](standards/AUTHENTICATION.md)
+
+### 3. Database: Multi-DB Support by Default
+Use PyDAL for runtime operations (required) and SQLAlchemy for schema creation. We support PostgreSQL (your default), MySQL, MariaDB Galera, and SQLite. Choose via the `DB_TYPE` environment variable.
+
+> **Key insight**: Pick PostgreSQL unless you have a specific reason not to. It's rock solid.
+
+[Learn more](standards/DATABASE.md)
+
+### 4. API Design: Version Everything
+All REST APIs use `/api/v{major}/endpoint`. Inter-container communication prefers gRPC. Support at least 2 previous versions (current + 2 prior). Plan for deprecation from day one.
+
+> **Best practice**: Design APIs for extensibility. Small, flexible inputs. Backward-compatible responses.
+
+[Learn more](standards/API_PROTOCOLS.md)
+
+### 5. Testing: Smoke Tests Are Non-Negotiable
+Run smoke tests before every commit. They verify your build works, services start, APIs respond, and the UI loads. Five minutes of testing saves you hours of debugging later.
+
+> **Golden rule**: If smoke tests pass, you can commit with confidence.
+
+[Learn more](standards/TESTING.md)
+
+## Pre-Commit Checklist
+
+Before you commit, run this magic command:
+
+```bash
+./scripts/pre-commit/pre-commit.sh
+```
+
+Here's what it checks:
+
+- [ ] Linters pass (flake8, eslint, golangci-lint, ansible-lint)
+- [ ] Security scans are clean (gosec, bandit, npm audit, Trivy)
+- [ ] No secrets leaked into code
+- [ ] Smoke tests pass (build, run, API, UI loads)
+- [ ] Full test suite passes
+- [ ] Version updated if needed
+- [ ] Docker builds successfully with debian-slim
+
+> **Important**: Only commit when explicitly asked. Run this script, verify everything passes, then request approval. No shortcuts!
+
+[Full pre-commit guide](PRE_COMMIT.md)
+
+## Keep It Clean: File Size Limits
+
+Files have limits for a reason (keeps things maintainable and fast):
+
+- **Code and markdown**: Max 25,000 characters
+- **CLAUDE.md**: Max 39,000 characters (only exception)
+- **When you hit the limit**: Split into modules, separate documents, or a new file
+- **Documentation strategy**: Detailed docs live in `docs/`, high-level context in CLAUDE.md
+
+## App-Specific Standards
+
+This document covers company-wide best practices. Your app is unique, so app-specific stuff goes in [`docs/APP_STANDARDS.md`](APP_STANDARDS.md):
+
+- Custom architecture patterns
+- Business logic requirements
+- Domain-specific data models
+- App-specific security rules
+- Integration requirements unique to you
+- Custom API endpoints
+- Performance needs specific to your use case
+
+> **Why split them?** So we can update template standards across all projects without losing your app-specific context. Everyone wins!
 
 ---
 
-## Language Selection Criteria
+## Need More Details?
 
-**Evaluate on a case-by-case basis which language to use for each project or service:**
+Dive into the individual standards documents for the full picture:
 
-### Python 3.13 (Default Choice)
-**Use Python for most applications:**
-- Web applications and REST APIs
-- Business logic and data processing
-- Integration services and connectors
-- CRUD applications
-- Admin panels and internal tools
-- Low to moderate traffic applications (<10K req/sec)
-
-**Advantages:**
-- Rapid development and iteration
-- Rich ecosystem of libraries
-- Excellent for prototyping and MVPs
-- Strong support for data processing
-- Easy maintenance and debugging
-
-### Go 1.23.x (Performance-Critical Only)
-**Use Go ONLY for high-traffic, performance-critical applications:**
-- Applications handling >10K requests/second
-- Network-intensive services requiring low latency
-- Services with latency requirements <10ms
-- CPU-bound operations requiring maximum throughput
-- Systems requiring minimal memory footprint
-- Real-time processing pipelines
-
-**Traffic Threshold Decision Matrix:**
-| Requests/Second | Language Choice | Rationale |
-|-----------------|-----------------|-----------|
-| < 1K req/sec    | Python 3.13     | Development speed priority |
-| 1K - 10K req/sec| Python 3.13     | Python can handle with optimization |
-| 10K - 50K req/sec| Evaluate both  | Consider complexity vs performance needs |
-| > 50K req/sec   | Go 1.23.x       | Performance becomes critical |
-
-**Important Considerations:**
-- Start with Python for faster iteration
-- Profile and measure actual performance before switching
-- Consider operational complexity of multi-language stack
-- Go adds development overhead - only use when necessary
+- [Language Selection](standards/LANGUAGE_SELECTION.md) - Python vs Go decision matrix
+- [Authentication](standards/AUTHENTICATION.md) - Flask-Security-Too, RBAC, SSO
+- [Frontend Development](standards/FRONTEND.md) - ReactJS patterns and best practices
+- [Database Standards](standards/DATABASE.md) - PyDAL, multi-database support
+- [API and Protocols](standards/API_PROTOCOLS.md) - REST, gRPC, versioning
+- [Performance](standards/PERFORMANCE.md) - Optimization, concurrency, speed
+- [Architecture](standards/ARCHITECTURE.md) - Microservices, Docker
+- [Kubernetes](standards/KUBERNETES.md) - Helm, Kustomize, deployments
+- [Testing](standards/TESTING.md) - Unit, integration, E2E, smoke tests
+- [Security](standards/SECURITY.md) - TLS, secrets, scanning
+- [Documentation](standards/DOCUMENTATION.md) - READMEs, release notes
+- [UI Design](standards/UI_DESIGN.md) - Components, patterns, styling
+- [Integrations](standards/INTEGRATIONS.md) - WaddleAI, MarchProxy, License Server
 
 ---
 
-## ReactJS Frontend Standards
+**Happy coding!** These standards exist to help you build reliable, secure, performant software. Questions? Check the docs. Still stuck? Ping your team!
 
-**ALL frontend applications MUST use ReactJS**
-
-### Project Structure
-
-```
-services/webui/
-├── public/
-│   ├── index.html
-│   └── favicon.ico
-├── src/
-│   ├── components/      # Reusable components
-│   ├── pages/           # Page components
-│   ├── services/        # API client services
-│   ├── hooks/           # Custom React hooks
-│   ├── context/         # React context providers
-│   ├── utils/           # Utility functions
-│   ├── App.jsx
-│   └── index.jsx
-├── package.json
-├── Dockerfile
-└── .env
-```
-
-### Required Dependencies
-
-```json
-{
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0",
-    "axios": "^1.6.0",
-    "@tanstack/react-query": "^5.0.0",
-    "zustand": "^4.4.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.0",
-    "vite": "^5.0.0",
-    "eslint": "^8.55.0",
-    "prettier": "^3.1.0"
-  }
-}
-```
-
-### API Client Integration
-
-**Create centralized API client for Flask backend:**
-
-```javascript
-// src/services/apiClient.js
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-
-export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true, // Important for session cookies
-});
-
-// Request interceptor for auth token
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Response interceptor for error handling
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Redirect to login on unauthorized
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-```
-
-### Authentication Context
-
-```javascript
-// src/context/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiClient } from '../services/apiClient';
-
-const AuthContext = createContext(null);
-
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Check if user is authenticated on mount
-    const checkAuth = async () => {
-      try {
-        const response = await apiClient.get('/auth/user');
-        setUser(response.data);
-      } catch (error) {
-        console.error('Not authenticated:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    checkAuth();
-  }, []);
-
-  const login = async (email, password) => {
-    const response = await apiClient.post('/auth/login', { email, password });
-    setUser(response.data.user);
-    localStorage.setItem('authToken', response.data.token);
-  };
-
-  const logout = async () => {
-    await apiClient.post('/auth/logout');
-    setUser(null);
-    localStorage.removeItem('authToken');
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => useContext(AuthContext);
-```
-
-### Protected Routes
-
-```javascript
-// src/components/ProtectedRoute.jsx
-import React from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-
-export const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
-};
-```
-
-### React Query for Data Fetching
-
-```javascript
-// src/hooks/useUsers.js
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../services/apiClient';
-
-export const useUsers = () => {
-  return useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await apiClient.get('/api/users');
-      return response.data;
-    },
-  });
-};
-
-export const useCreateUser = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (userData) => {
-      const response = await apiClient.post('/api/users', userData);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['users']);
-    },
-  });
-};
-```
-
-### Component Standards
-
-**Use functional components with hooks:**
-
-```javascript
-import React, { useState, useEffect } from 'react';
-import { useUsers, useCreateUser } from '../hooks/useUsers';
-
-export const UserList = () => {
-  const { data: users, isLoading, error } = useUsers();
-  const createUser = useCreateUser();
-
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <div>
-      <h2>Users</h2>
-      <ul>
-        {users.map(user => (
-          <li key={user.id}>{user.name} - {user.email}</li>
-        ))}
-      </ul>
-    </div>
-  );
-};
-```
-
-### Docker Configuration for React
-
-```dockerfile
-# services/webui/Dockerfile
-FROM node:18-slim AS builder
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
-```
-
----
-
-## Security Standards
-
-### Input Validation
-
-- ALL inputs MUST have appropriate validators
-- Use framework-native validation (PyDAL validators, Go libraries)
-- Implement XSS and SQL injection prevention
-- Server-side validation for all client input
-- CSRF protection using framework native features
-
-### Authentication & Authorization
-
-- Multi-factor authentication support
-- Role-based access control (RBAC)
-- API key management with rotation
-- JWT token validation with proper expiration
-- Session management with secure cookies
-
-### TLS/Encryption
-
-- **TLS enforcement**: TLS 1.2 minimum, prefer TLS 1.3
-- **Connection security**: Use HTTPS where possible
-- **Modern protocols**: HTTP3/QUIC for high-performance
-- **Standard security**: JWT, MFA, mTLS where applicable
-- **Enterprise SSO**: SAML/OAuth2 as enterprise features
-
-### Dependency Security
-
-- **ALWAYS check Dependabot alerts** before commits
-- **Monitor vulnerabilities** via Socket.dev
-- **Mandatory security scanning** before dependency changes
-- **Fix all security alerts immediately**
-- **Version pinning**: Exact versions for security-critical dependencies
-
-### Vulnerability Response Process
-
-1. Identify affected packages and severity
-2. Update to patched versions immediately
-3. Test updated dependencies thoroughly
-4. Document security fixes in commit messages
-5. Verify no new vulnerabilities introduced
-
----
-
-## Web UI Design Standards
-
-**ALL ReactJS frontend applications MUST follow these design patterns:**
-
-### Core Design Principles
-- **Multi-page design preferred** - avoid single-page applications for marketing sites
-- **Modern aesthetic** with clean, professional appearance
-- **Subtle color schemes** - not overly bright
-- **Gradient usage encouraged** - subtle gradients for visual depth and modern appeal
-- **Responsive design** - seamless across all device sizes
-- **Performance focused** - fast loading times and optimized assets
-
-### UI Framework Standards
-- Use **Tailwind CSS** for styling
-- Implement **Radix UI** or **Shadcn UI** for accessible components
-- Follow **accessibility (a11y)** best practices (WCAG 2.1 AA)
-- Use **Lucide React** or **Heroicons** for icons
-- Implement dark mode support where applicable
-
-### Layout Patterns
-- **Elder-style collapsible sidebar** for navigation
-- **Tab navigation** for feature organization
-- **Gold (amber-400) text theme** for accents
-- **Consistent spacing** using Tailwind spacing scale
-- **Mobile-first responsive** breakpoints
-
-For comprehensive UI guidelines, color palettes, and component examples, create detailed documentation in `docs/ui-guidelines.md`.
-
----
-
-## Ansible Integration
-
-- **Documentation Research**: ALWAYS research modules on https://docs.ansible.com
-- **Module verification**: Check official docs for syntax and parameters
-- **Best practices**: Follow community standards and idempotency
-- **Testing**: Ensure playbooks are idempotent
-
----
-
-## CI/CD Standards
-
-For comprehensive CI/CD standards, workflow configuration, naming conventions, and security scanning requirements, see **[WORKFLOWS.md](WORKFLOWS.md)**.
-
-**Key Principles:**
-- Efficient execution with parallel builds where possible
-- Mandatory security scanning for all code
-- Consistent naming conventions across all projects
-- Version management integration in all workflows
-- Comprehensive documentation requirements
-- Multi-architecture Docker builds (amd64/arm64)
-- Debian-slim base images for all containers
-
----
-
-## Quality Checklist
-
-Before marking any task complete, verify:
-- ✅ All error cases handled properly
-- ✅ Unit tests cover all code paths
-- ✅ Integration tests verify component interactions
-- ✅ Security requirements fully implemented
-- ✅ Performance meets acceptable standards
-- ✅ Documentation complete and accurate
-- ✅ Code review standards met
-- ✅ No hardcoded secrets or credentials
-- ✅ Logging and monitoring in place
-- ✅ Build passes in containerized environment
-- ✅ No security vulnerabilities in dependencies
-- ✅ Edge cases and boundary conditions tested
-- ✅ License enforcement configured correctly (if release-ready)
+**Template Version**: 1.3.0 | **Last Updated**: 2026-01-22 | **Maintained by**: Penguin Tech Inc
