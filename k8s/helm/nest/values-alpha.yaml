@@ -1,0 +1,109 @@
+# Alpha environment values for nest
+# Local development/testing environment
+
+global:
+  namespace: nest-alpha
+  imagePullPolicy: Never
+  imageRegistry: ""
+
+# PostgreSQL
+postgres:
+  replicaCount: 1
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Redis
+redis:
+  replicaCount: 1
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# Go API Service
+api:
+  replicaCount: 1
+  image:
+    pullPolicy: Never
+  env:
+    GIN_MODE: debug
+    LOG_LEVEL: DEBUG
+    ENVIRONMENT: development
+    RELEASE_MODE: "false"
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Python Manager Service
+manager:
+  replicaCount: 1
+  image:
+    pullPolicy: Never
+  env:
+    ENVIRONMENT: development
+    DEBUG: "true"
+    LOG_LEVEL: DEBUG
+    RELEASE_MODE: "false"
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# React Frontend
+web:
+  replicaCount: 1
+  image:
+    pullPolicy: Never
+  env:
+    NODE_ENV: development
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# Prometheus - disabled in alpha
+prometheus:
+  enabled: false
+
+# Grafana - disabled in alpha
+grafana:
+  enabled: false
+
+# Ingress - disabled in alpha
+ingress:
+  enabled: false
+
+# Pod Security - relaxed for development
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: false
+  runAsUser: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: true

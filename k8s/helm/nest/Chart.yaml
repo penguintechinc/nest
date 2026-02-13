@@ -1,0 +1,23 @@
+apiVersion: v2
+name: nest
+description: NEST Development Environment - Comprehensive multi-service development setup
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+maintainers:
+  - name: Penguin Tech Inc
+    email: support@penguintech.io
+    url: https://www.penguintech.io
+
+keywords:
+  - nest
+  - development
+  - multi-service
+  - go
+  - python
+  - react
+
+home: https://github.com/penguintechinc/nest
+sources:
+  - https://github.com/penguintechinc/nest

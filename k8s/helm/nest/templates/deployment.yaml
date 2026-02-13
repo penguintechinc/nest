@@ -1,0 +1,417 @@
+{{- if .Values.postgres.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}-postgres
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nest.postgres.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.postgres.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: postgres
+        image: {{ include "nest.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.postgres.image.repository "tag" .Values.postgres.image.tag) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - name: postgres
+          containerPort: {{ .Values.postgres.service.port }}
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.postgres.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U {{ .Values.postgres.env.POSTGRES_USER }} -d {{ .Values.postgres.env.POSTGRES_DB }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U {{ .Values.postgres.env.POSTGRES_USER }} -d {{ .Values.postgres.env.POSTGRES_DB }}
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        resources:
+          {{- toYaml .Values.postgres.resources | nindent 10 }}
+        {{- if .Values.postgres.persistence.enabled }}
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        {{- end }}
+      {{- if .Values.postgres.persistence.enabled }}
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: {{ include "nest.fullname" . }}-postgres-pvc
+      {{- end }}
+{{- end }}
+
+{{- if .Values.redis.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}-redis
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nest.redis.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.redis.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: redis
+        image: {{ include "nest.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.redis.image.repository "tag" .Values.redis.image.tag) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        command:
+        - redis-server
+        - --requirepass
+        - {{ .Values.redis.env.REDIS_PASSWORD }}
+        - --appendonly
+        - "yes"
+        ports:
+        - name: redis
+          containerPort: {{ .Values.redis.service.port }}
+          protocol: TCP
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - --raw
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - --raw
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        resources:
+          {{- toYaml .Values.redis.resources | nindent 10 }}
+        {{- if .Values.redis.persistence.enabled }}
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        {{- end }}
+      {{- if .Values.redis.persistence.enabled }}
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: {{ include "nest.fullname" . }}-redis-pvc
+      {{- end }}
+{{- end }}
+
+{{- if .Values.api.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}-api
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nest.api.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: api
+        image: {{ include "nest.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.api.image.repository "tag" .Values.api.image.tag) }}
+        imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.api.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.api.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- if .Values.api.healthCheck.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.api.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.api.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.api.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.api.healthCheck.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.api.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.api.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.api.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.api.healthCheck.timeoutSeconds }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.api.resources | nindent 10 }}
+{{- end }}
+
+{{- if .Values.manager.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}-manager
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nest.manager.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.manager.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: manager
+  template:
+    metadata:
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: manager
+    spec:
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: manager
+        image: {{ include "nest.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.manager.image.repository "tag" .Values.manager.image.tag) }}
+        imagePullPolicy: {{ .Values.manager.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.manager.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.manager.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- if .Values.manager.healthCheck.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.manager.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.manager.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.manager.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.manager.healthCheck.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.manager.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.manager.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.manager.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.manager.healthCheck.timeoutSeconds }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.manager.resources | nindent 10 }}
+{{- end }}
+
+{{- if .Values.web.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}-web
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nest.web.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+    spec:
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: web
+        image: {{ include "nest.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.web.image.repository "tag" .Values.web.image.tag) }}
+        imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.web.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.web.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- if .Values.web.healthCheck.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.web.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.web.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.web.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.web.healthCheck.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.web.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.web.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.web.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.web.healthCheck.timeoutSeconds }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.web.resources | nindent 10 }}
+{{- end }}
+
+{{- if .Values.prometheus.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}-prometheus
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nest.prometheus.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.prometheus.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: prometheus
+    spec:
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: prometheus
+        image: {{ include "nest.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.prometheus.image.repository "tag" .Values.prometheus.image.tag) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        args:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+        - '--web.console.templates=/etc/prometheus/consoles'
+        - '--storage.tsdb.retention.time=200h'
+        - '--web.enable-lifecycle'
+        ports:
+        - name: http
+          containerPort: {{ .Values.prometheus.service.port }}
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.prometheus.resources | nindent 10 }}
+        {{- if .Values.prometheus.persistence.enabled }}
+        volumeMounts:
+        - name: prometheus-data
+          mountPath: /prometheus
+        {{- end }}
+      {{- if .Values.prometheus.persistence.enabled }}
+      volumes:
+      - name: prometheus-data
+        persistentVolumeClaim:
+          claimName: {{ include "nest.fullname" . }}-prometheus-pvc
+      {{- end }}
+{{- end }}
+
+{{- if .Values.grafana.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nest.fullname" . }}-grafana
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nest.grafana.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.grafana.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: grafana
+  template:
+    metadata:
+      labels:
+        {{- include "nest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: grafana
+    spec:
+      serviceAccountName: {{ include "nest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: grafana
+        image: {{ include "nest.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.grafana.image.repository "tag" .Values.grafana.image.tag) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.grafana.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.grafana.resources | nindent 10 }}
+        {{- if .Values.grafana.persistence.enabled }}
+        volumeMounts:
+        - name: grafana-data
+          mountPath: /var/lib/grafana
+        {{- end }}
+      {{- if .Values.grafana.persistence.enabled }}
+      volumes:
+      - name: grafana-data
+        persistentVolumeClaim:
+          claimName: {{ include "nest.fullname" . }}-grafana-pvc
+      {{- end }}
+{{- end }}
