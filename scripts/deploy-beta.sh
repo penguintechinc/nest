@@ -11,7 +11,7 @@ RELEASE_NAME="nest"
 CHART_PATH="$PROJECT_ROOT/k8s/helm/nest"
 VALUES_FILE="$CHART_PATH/values-beta.yaml"
 IMAGE_REGISTRY="registry-dal2.penguintech.io"
-APP_HOST="nest.penguintech.io"
+APP_HOST="nest.penguintech.cloud"
 
 DRY_RUN=0
 ROLLBACK=0

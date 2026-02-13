@@ -80,8 +80,8 @@ web:
     pullPolicy: Always
   env:
     NODE_ENV: production
-    VITE_API_URL: https://nest.penguintech.io/api
-    VITE_MANAGER_URL: https://nest.penguintech.io/manager
+    VITE_API_URL: https://nest.penguintech.cloud/api
+    VITE_MANAGER_URL: https://nest.penguintech.cloud/manager
   resources:
     requests:
       memory: "256Mi"
@@ -114,7 +114,7 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
   hosts:
-    - host: nest.penguintech.io
+    - host: nest.penguintech.cloud
       paths:
         - path: /
           pathType: Prefix
@@ -131,7 +131,7 @@ ingress:
   tls:
     - secretName: nest-tls
       hosts:
-        - nest.penguintech.io
+        - nest.penguintech.cloud
 
 # Pod Security - strict for beta
 podSecurityContext:
