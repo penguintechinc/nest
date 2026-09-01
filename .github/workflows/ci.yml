@@ -2,15 +2,30 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [ main, develop, feature/* ]
+    # Release branches are deliberately NOT listed here. Everything reaches them
+    # through a PR (devops.md: "Every branch-to-branch merge requires a PR"), and
+    # that PR is gated by the pull_request trigger below, so a post-merge push run
+    # would be redundant. Listing them also makes zizmor treat this as a
+    # publishing workflow and flags every cache step as cache-poisoning.
+    branches: [ main, develop, 'feature/**' ]
   pull_request:
-    branches: [ main, develop ]
+    # pull_request filters on the BASE branch. Previously only main/develop were
+    # listed, so a PR into v1.2.x triggered nothing — the "merge once green" gate
+    # was checking a run that never happened. PR #29 only appeared to have CI
+    # because its head branch matched the feature/* push trigger above.
+    branches: [ main, develop, 'release/**', 'v*.*.x' ]
   schedule:
     # Run tests daily at 2 AM UTC
     - cron: '0 2 * * *'
 
+# Least-privilege default for every job. Without this the workflow inherits the
+# repository default, which zizmor flags as excessive-permissions. Jobs needing
+# more (e.g. security, which uploads SARIF) declare their own permissions block.
+permissions:
+  contents: read
+
 env:
-  GO_VERSION: '1.23.5'
+  GO_VERSION: '1.25.14'
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '18'
   REGISTRY: ghcr.io
@@ -27,6 +42,9 @@ jobs:
       docs: ${{ steps.changes.outputs.docs }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          # See the note on the other checkout steps: do not persist the token.
+          persist-credentials: false
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4
         id: changes
         with:
@@ -65,11 +83,15 @@ jobs:
     if: needs.changes.outputs.go == 'true'
     strategy:
       matrix:
-        go-version: ['1.23.5', '1.24.0']
+        go-version: ['1.25.14']
 
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Set up Go ${{ matrix.go-version }}
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
@@ -155,6 +177,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -171,18 +197,19 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python3 -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov pytest-asyncio black isort flake8 mypy
+        # ruff is the single Python linter/formatter/import-sorter (replaces the
+        # former black + isort + flake8). Pinned to the same version the local
+        # pre-commit hook uses (.pre-commit-config.yaml) so CI and local agree.
+        pip install pytest pytest-cov pytest-asyncio ruff==0.8.4 mypy
 
-    - name: Run Black (code formatting)
-      run: black --check --diff .
-
-    - name: Run isort (import sorting)
-      run: isort --check-only --diff .
-
-    - name: Run flake8 (linting)
-      run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    - name: Run ruff (format check + lint)
+      run: |
+        # Config (rule selection, line length, target) lives in pyproject.toml,
+        # so this invocation stays identical to the local pre-commit hook.
+        ruff format --check .
+        ruff check --output-format=github .
 
     - name: Run mypy (type checking)
       run: mypy . --ignore-missing-imports
@@ -190,7 +217,24 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        pytest --cov=shared --cov=apps --cov-report=xml --cov-report=html --junitxml=test-results.xml
+        # Each service is its own pytest rootdir: apps/api and apps/manager both
+        # ship a top-level `store`/`utils`/`worker` package, so collecting them
+        # together from the repo root collides on sys.path (ImportError:
+        # OperationStore / No module named 'utils'). Run each in its own directory,
+        # which is how they are designed and how they pass locally (136 + 919).
+        #
+        # NOT run here: the repo-root tests/ directory (26 tests). It relies on
+        # sys.path.insert hacks that break under the same collision and has never
+        # actually executed in CI (the old Black step failed first and masked it).
+        # Tracked as a separate fix rather than silently folded in — see the
+        # fix/ci-pipeline PR description.
+        set -euo pipefail
+        cd apps/api
+        python3 -m pytest --cov=. --cov-report=xml:"$GITHUB_WORKSPACE/coverage-api.xml" \
+          --junitxml="$GITHUB_WORKSPACE/test-results-api.xml"
+        cd ../manager
+        python3 -m pytest --cov=. --cov-report=xml:"$GITHUB_WORKSPACE/coverage-manager.xml" \
+          --junitxml="$GITHUB_WORKSPACE/test-results-manager.xml"
       env:
         DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379/1
@@ -200,7 +244,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6
       with:
-        file: ./coverage.xml
+        files: ./coverage-api.xml,./coverage-manager.xml
         flags: python-tests
         name: python-coverage
 
@@ -216,6 +260,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Set up Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -280,6 +328,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Set up Go
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
@@ -341,6 +393,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Set up Node.js
       uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -375,9 +431,20 @@ jobs:
   security:
     runs-on: ubuntu-latest
     needs: changes
+    # upload-sarif writes to the code-scanning API. The workflow declares no
+    # permissions block, so the default token is read-only and the SARIF uploads
+    # 403 even once the scan files exist.
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Set up Go for gosec
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
@@ -390,10 +457,18 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     # GATING: secrets detection — fails the build if any secret is found.
+    # Run the gitleaks binary directly rather than gitleaks-action@v2, which
+    # requires a paid GITLEAKS_LICENSE for organization-owned repos and fails
+    # closed without one ("[penguintechinc] is an organization. License key is
+    # required."). That failure aborted the job before gosec/Trivy ran, so their
+    # SARIF files were never produced and the uploads failed too. The gate is
+    # unchanged: a finding still fails the build via --exit-code 1.
     - name: Run gitleaks (secret detection)
-      uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        curl -sSfL -o /tmp/gitleaks.tar.gz \
+          https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+        tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+        gitleaks dir . --redact --exit-code 1 --no-banner
 
     # Non-gating: gosec across a multi-module repo produces frequent package-load
     # noise, so it reports (SARIF -> code scanning) but does not hard-block. Go
@@ -443,16 +518,18 @@ jobs:
         ignore-unfixed: true
         exit-code: '1'
 
+    # Guard on the file existing: if the scan step above fails or is skipped the
+    # SARIF is never written, and a bare `if: always()` turns one failure into two.
     - name: Upload gosec scan results
       uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4
-      if: always()
+      if: always() && hashFiles('gosec-results.sarif') != ''
       with:
         sarif_file: 'gosec-results.sarif'
         category: 'gosec'
 
     - name: Upload Trivy scan results
       uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4
-      if: always()
+      if: always() && hashFiles('trivy-results.sarif') != ''
       with:
         sarif_file: 'trivy-results.sarif'
         category: 'trivy'
@@ -482,6 +559,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Check license dependencies
       run: |
@@ -489,9 +570,13 @@ jobs:
         grep -r "license.penguintech.io" . --exclude-dir=.git --exclude-dir=node_modules || true
         grep -r "PENG-" . --exclude-dir=.git --exclude-dir=node_modules || true
 
-        # Verify license client files exist
+        # Verify license client files exist.
+        # The Python client is intentionally absent: shared/licensing/python_client.py
+        # was removed in 7d713e8 ("remove shared Python code replaced by penguin-libs
+        # packages"). Python services consume licensing via the published
+        # penguin-licensing package and apps/manager/routes/license.py, so asserting a
+        # local copy here contradicts the shared-library standard.
         test -f shared/licensing/client.go
-        test -f shared/licensing/python_client.py
         test -f web/src/lib/license-client.js
 
         echo "License integration check passed"
@@ -505,26 +590,42 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        # Do not leave the token in .git/config; nothing here pushes, and an
+        # artifact upload of the workspace would otherwise carry the credential.
+        persist-credentials: false
 
     - name: Download all artifacts
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
 
     - name: Generate test summary
       run: |
-        echo "# Test Summary" > test-summary.md
-        echo "" >> test-summary.md
-        echo "## Job Results" >> test-summary.md
-        echo "- Go Tests: ${{ needs.go-test.result }}" >> test-summary.md
-        echo "- Python Tests: ${{ needs.python-test.result }}" >> test-summary.md
-        echo "- Node.js Tests: ${{ needs.node-test.result }}" >> test-summary.md
-        echo "- Integration Tests: ${{ needs.integration-test.result }}" >> test-summary.md
-        echo "- E2E Tests: ${{ needs.e2e-test.result }}" >> test-summary.md
-        echo "- Security Scan: ${{ needs.security.result }}" >> test-summary.md
-        echo "- License Check: ${{ needs.license-check.result }}" >> test-summary.md
-        echo "" >> test-summary.md
-        echo "**Commit:** ${{ github.sha }}" >> test-summary.md
-        echo "**Branch:** ${{ github.ref_name }}" >> test-summary.md
-        echo "**Workflow Run:** #${{ github.run_number }}" >> test-summary.md
+        # Grouped redirect (one `> file`) rather than a run of `>> file` lines,
+        # per shellcheck SC2129. needs.*.result is a fixed status enum, not
+        # attacker-controllable, so it is safe to expand inline; the commit/branch
+        # values come through env below because they are not.
+        {
+          echo "# Test Summary"
+          echo ""
+          echo "## Job Results"
+          echo "- Go Tests: ${{ needs.go-test.result }}"
+          echo "- Python Tests: ${{ needs.python-test.result }}"
+          echo "- Node.js Tests: ${{ needs.node-test.result }}"
+          echo "- Integration Tests: ${{ needs.integration-test.result }}"
+          echo "- E2E Tests: ${{ needs.e2e-test.result }}"
+          echo "- Security Scan: ${{ needs.security.result }}"
+          echo "- License Check: ${{ needs.license-check.result }}"
+          echo ""
+          echo "**Commit:** $COMMIT_SHA"
+          echo "**Branch:** $BRANCH_NAME"
+          echo "**Workflow Run:** #$RUN_NUMBER"
+        } > test-summary.md
+      env:
+        # Passed through the environment rather than expanded into the script:
+        # a branch named `$(...)` would otherwise execute during expansion.
+        COMMIT_SHA: ${{ github.sha }}
+        BRANCH_NAME: ${{ github.ref_name }}
+        RUN_NUMBER: ${{ github.run_number }}
 
     - name: Upload test summary
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
