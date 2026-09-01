@@ -1,4 +1,5 @@
 """Tests that no controller or route directly imports pydal."""
+
 from pathlib import Path
 
 MANAGER_DIR = Path(__file__).parent.parent
@@ -15,17 +16,21 @@ def test_no_pydal_imports_in_routes():
     """Routes should not import from pydal or models.db directly."""
     for f in _py_files_in("routes"):
         source = f.read_text()
-        assert "from pydal import" not in source, \
-            f"{f.relative_to(MANAGER_DIR)} still imports from pydal"
-        assert "import pydal" not in source, \
-            f"{f.relative_to(MANAGER_DIR)} still imports pydal"
+        assert (
+            "from pydal import" not in source
+        ), f"{f.relative_to(MANAGER_DIR)} still imports from pydal"
+        assert (
+            "import pydal" not in source
+        ), f"{f.relative_to(MANAGER_DIR)} still imports pydal"
 
 
 def test_no_pydal_imports_in_controllers():
     """Controllers should not import from pydal or models.db directly."""
     for f in _py_files_in("controllers"):
         source = f.read_text()
-        assert "from pydal import" not in source, \
-            f"{f.relative_to(MANAGER_DIR)} still imports from pydal"
-        assert "import pydal" not in source, \
-            f"{f.relative_to(MANAGER_DIR)} still imports pydal"
+        assert (
+            "from pydal import" not in source
+        ), f"{f.relative_to(MANAGER_DIR)} still imports from pydal"
+        assert (
+            "import pydal" not in source
+        ), f"{f.relative_to(MANAGER_DIR)} still imports pydal"

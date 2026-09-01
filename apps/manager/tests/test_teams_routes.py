@@ -1,10 +1,11 @@
 """Teams routes tests — comprehensive coverage for routes/teams.py."""
+
 import os
 import sys
 import types
-import pytest
-import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Ensure the manager app directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -54,6 +55,7 @@ _application.config["TESTING"] = True
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_db() -> MagicMock:
     """Build a fresh MagicMock DB for teams routes."""
     db = MagicMock()
@@ -90,8 +92,11 @@ def _make_db() -> MagicMock:
     return db
 
 
-def _make_team(team_id: int = 1, name: str = "Alpha", is_global: bool = False) -> MagicMock:
+def _make_team(
+    team_id: int = 1, name: str = "Alpha", is_global: bool = False
+) -> MagicMock:
     from datetime import datetime
+
     t = MagicMock()
     t.id = team_id
     t.name = name
@@ -107,7 +112,9 @@ def _make_team(team_id: int = 1, name: str = "Alpha", is_global: bool = False) -
     return t
 
 
-def _make_membership(team_id: int = 1, user_id: int = 1, role: str = "team_viewer") -> MagicMock:
+def _make_membership(
+    team_id: int = 1, user_id: int = 1, role: str = "team_viewer"
+) -> MagicMock:
     m = MagicMock()
     m.team_id = team_id
     m.user_id = user_id
@@ -128,6 +135,7 @@ def _make_user_mock(user_id: int = 1) -> MagicMock:
 
 def _make_token(role: str = "admin") -> str:
     from utils.auth import create_token
+
     return create_token(user_id=1, email="test@example.com", role=role)
 
 
@@ -143,6 +151,7 @@ _TEAMS_GET_DB = "routes.teams.get_db"
 # ---------------------------------------------------------------------------
 # GET /api/v1/teams — list_teams
 # ---------------------------------------------------------------------------
+
 
 class TestListTeams:
     @pytest.mark.asyncio
@@ -220,6 +229,7 @@ class TestListTeams:
 # ---------------------------------------------------------------------------
 # POST /api/v1/teams — create_team
 # ---------------------------------------------------------------------------
+
 
 class TestCreateTeam:
     @pytest.mark.asyncio
@@ -334,6 +344,7 @@ class TestCreateTeam:
 # ---------------------------------------------------------------------------
 # GET /api/v1/teams/<team_id> — get_team
 # ---------------------------------------------------------------------------
+
 
 class TestGetTeam:
     @pytest.mark.asyncio
@@ -464,6 +475,7 @@ class TestGetTeam:
 # ---------------------------------------------------------------------------
 # PUT /api/v1/teams/<team_id> — update_team
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateTeam:
     @pytest.mark.asyncio
@@ -632,6 +644,7 @@ class TestUpdateTeam:
 # DELETE /api/v1/teams/<team_id> — delete_team
 # ---------------------------------------------------------------------------
 
+
 class TestDeleteTeam:
     @pytest.mark.asyncio
     async def test_delete_team_success(self):
@@ -707,6 +720,7 @@ class TestDeleteTeam:
 # ---------------------------------------------------------------------------
 # GET /api/v1/teams/<team_id>/members — list_team_members
 # ---------------------------------------------------------------------------
+
 
 class TestListTeamMembers:
     @pytest.mark.asyncio
@@ -800,6 +814,7 @@ class TestListTeamMembers:
 # ---------------------------------------------------------------------------
 # POST /api/v1/teams/<team_id>/members — add_team_member
 # ---------------------------------------------------------------------------
+
 
 class TestAddTeamMember:
     @pytest.mark.asyncio
@@ -1018,6 +1033,7 @@ class TestAddTeamMember:
 # ---------------------------------------------------------------------------
 # DELETE /api/v1/teams/<team_id>/members/<user_id> — remove_team_member
 # ---------------------------------------------------------------------------
+
 
 class TestRemoveTeamMember:
     @pytest.mark.asyncio

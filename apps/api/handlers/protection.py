@@ -1,12 +1,10 @@
 """Protection and snapshot handlers for VolumeSnapshot and DataProtectionPolicy CRs."""
+
 import asyncio
 import uuid
-from datetime import datetime, timezone
 
-from quart import jsonify, request, g
-from werkzeug.exceptions import BadRequest, NotFound
-
-from middleware import get_tenant, get_claims, emit_audit, AuditEvent
+from middleware import AuditEvent, emit_audit, get_claims, get_tenant
+from quart import g, jsonify, request
 from store import Store
 
 
@@ -23,16 +21,26 @@ async def list_snapshots(store: Store):
         # In production, would query K8s API
         snapshots = await store.list_snapshots(tenant)
 
-        return jsonify({
-            "snapshots": [s.to_dict() for s in snapshots],
-            "meta": {"count": len(snapshots), "version": 1}
-        }), 200
+        return (
+            jsonify(
+                {
+                    "snapshots": [s.to_dict() for s in snapshots],
+                    "meta": {"count": len(snapshots), "version": 1},
+                }
+            ),
+            200,
+        )
     except Exception as e:
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def create_snapshot(store: Store):
@@ -47,11 +55,16 @@ async def create_snapshot(store: Store):
     try:
         req = await request.get_json() or {}
     except Exception as e:
-        return jsonify({
-            "code": "nest.api.invalid_request",
-            "message": str(e),
-            "requestId": request_id,
-        }), 400
+        return (
+            jsonify(
+                {
+                    "code": "nest.api.invalid_request",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
 
     # Validate required fields
     name = req.get("name", "").strip()
@@ -59,11 +72,16 @@ async def create_snapshot(store: Store):
     snapshot_class = req.get("snapshotClass", "nest-rbd-snapshot").strip()
 
     if not name or not source_pvc:
-        return jsonify({
-            "code": "nest.api.validation_error",
-            "message": "name and sourcePVC are required",
-            "requestId": request_id,
-        }), 400
+        return (
+            jsonify(
+                {
+                    "code": "nest.api.validation_error",
+                    "message": "name and sourcePVC are required",
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
 
     try:
         snapshot = await store.create_snapshot(
@@ -74,16 +92,18 @@ async def create_snapshot(store: Store):
         )
 
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="snapshot.created",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="VolumeSnapshot",
-                resource_name=name,
-                action="create",
-                outcome="success",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="snapshot.created",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="VolumeSnapshot",
+                    resource_name=name,
+                    action="create",
+                    outcome="success",
+                    request_id=request_id,
+                )
+            )
         )
 
         op_id = str(uuid.uuid4())
@@ -93,40 +113,54 @@ async def create_snapshot(store: Store):
         return response
     except ValueError as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="snapshot.created",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="VolumeSnapshot",
-                resource_name=name,
-                action="create",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="snapshot.created",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="VolumeSnapshot",
+                    resource_name=name,
+                    action="create",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.snapshot.already_exists",
-            "message": str(e),
-            "requestId": request_id,
-        }), 409
+        return (
+            jsonify(
+                {
+                    "code": "nest.snapshot.already_exists",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            409,
+        )
     except Exception as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="snapshot.created",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="VolumeSnapshot",
-                resource_name=name,
-                action="create",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="snapshot.created",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="VolumeSnapshot",
+                    resource_name=name,
+                    action="create",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def delete_snapshot(store: Store):
@@ -142,54 +176,70 @@ async def delete_snapshot(store: Store):
     try:
         await store.delete_snapshot(tenant, name)
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="snapshot.deleted",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="VolumeSnapshot",
-                resource_name=name,
-                action="delete",
-                outcome="success",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="snapshot.deleted",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="VolumeSnapshot",
+                    resource_name=name,
+                    action="delete",
+                    outcome="success",
+                    request_id=request_id,
+                )
+            )
         )
         return "", 204
     except ValueError:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="snapshot.deleted",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="VolumeSnapshot",
-                resource_name=name,
-                action="delete",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="snapshot.deleted",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="VolumeSnapshot",
+                    resource_name=name,
+                    action="delete",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.snapshot.not_found",
-            "message": "VolumeSnapshot not found",
-            "requestId": request_id,
-        }), 404
+        return (
+            jsonify(
+                {
+                    "code": "nest.snapshot.not_found",
+                    "message": "VolumeSnapshot not found",
+                    "requestId": request_id,
+                }
+            ),
+            404,
+        )
     except Exception as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="snapshot.deleted",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="VolumeSnapshot",
-                resource_name=name,
-                action="delete",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="snapshot.deleted",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="VolumeSnapshot",
+                    resource_name=name,
+                    action="delete",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def list_protection_policies(store: Store):
@@ -203,16 +253,26 @@ async def list_protection_policies(store: Store):
     try:
         policies = await store.list_protection_policies(tenant)
 
-        return jsonify({
-            "policies": [p.to_dict() for p in policies],
-            "meta": {"count": len(policies), "version": 1}
-        }), 200
+        return (
+            jsonify(
+                {
+                    "policies": [p.to_dict() for p in policies],
+                    "meta": {"count": len(policies), "version": 1},
+                }
+            ),
+            200,
+        )
     except Exception as e:
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def create_protection_policy(store: Store):
@@ -227,11 +287,16 @@ async def create_protection_policy(store: Store):
     try:
         req = await request.get_json() or {}
     except Exception as e:
-        return jsonify({
-            "code": "nest.api.invalid_request",
-            "message": str(e),
-            "requestId": request_id,
-        }), 400
+        return (
+            jsonify(
+                {
+                    "code": "nest.api.invalid_request",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
 
     # Validate required fields
     name = req.get("name", "").strip()
@@ -240,11 +305,16 @@ async def create_protection_policy(store: Store):
     destination = req.get("destination", "").strip()
 
     if not name:
-        return jsonify({
-            "code": "nest.api.validation_error",
-            "message": "name is required",
-            "requestId": request_id,
-        }), 400
+        return (
+            jsonify(
+                {
+                    "code": "nest.api.validation_error",
+                    "message": "name is required",
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
 
     try:
         policy = await store.create_protection_policy(
@@ -256,16 +326,18 @@ async def create_protection_policy(store: Store):
         )
 
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="policy.created",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="DataProtectionPolicy",
-                resource_name=name,
-                action="create",
-                outcome="success",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="policy.created",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="DataProtectionPolicy",
+                    resource_name=name,
+                    action="create",
+                    outcome="success",
+                    request_id=request_id,
+                )
+            )
         )
 
         op_id = str(uuid.uuid4())
@@ -275,40 +347,54 @@ async def create_protection_policy(store: Store):
         return response
     except ValueError as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="policy.created",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="DataProtectionPolicy",
-                resource_name=name,
-                action="create",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="policy.created",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="DataProtectionPolicy",
+                    resource_name=name,
+                    action="create",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.policy.already_exists",
-            "message": str(e),
-            "requestId": request_id,
-        }), 409
+        return (
+            jsonify(
+                {
+                    "code": "nest.policy.already_exists",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            409,
+        )
     except Exception as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="policy.created",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="DataProtectionPolicy",
-                resource_name=name,
-                action="create",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="policy.created",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="DataProtectionPolicy",
+                    resource_name=name,
+                    action="create",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def delete_protection_policy(store: Store):
@@ -324,51 +410,67 @@ async def delete_protection_policy(store: Store):
     try:
         await store.delete_protection_policy(tenant, name)
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="policy.deleted",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="DataProtectionPolicy",
-                resource_name=name,
-                action="delete",
-                outcome="success",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="policy.deleted",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="DataProtectionPolicy",
+                    resource_name=name,
+                    action="delete",
+                    outcome="success",
+                    request_id=request_id,
+                )
+            )
         )
         return "", 204
     except ValueError:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="policy.deleted",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="DataProtectionPolicy",
-                resource_name=name,
-                action="delete",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="policy.deleted",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="DataProtectionPolicy",
+                    resource_name=name,
+                    action="delete",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.policy.not_found",
-            "message": "DataProtectionPolicy not found",
-            "requestId": request_id,
-        }), 404
+        return (
+            jsonify(
+                {
+                    "code": "nest.policy.not_found",
+                    "message": "DataProtectionPolicy not found",
+                    "requestId": request_id,
+                }
+            ),
+            404,
+        )
     except Exception as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="policy.deleted",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="DataProtectionPolicy",
-                resource_name=name,
-                action="delete",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="policy.deleted",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="DataProtectionPolicy",
+                    resource_name=name,
+                    action="delete",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )

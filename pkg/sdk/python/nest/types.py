@@ -1,6 +1,7 @@
 """Nest SDK type definitions."""
+
 from dataclasses import dataclass, field
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 
 @dataclass(slots=True)

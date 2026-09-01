@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from penguin_dal.db import AsyncDB
-
 from db_models import Base
-from models import (DataProtectionPolicyRecord, DataResourceRecord,
-                    OperationRecord, SearchPoolRecord, VolumeSnapshotRecord)
+from models import (
+    DataResourceRecord,
+    OperationRecord,
+)
+from penguin_dal.db import AsyncDB
 from store.sql_store import SQLStore
 
 
@@ -632,7 +633,9 @@ class TestSQLStoreUpdateDelete404:
     async def test_update_health_nonexistent(self, sql_store: SQLStore):
         """Test updating health of nonexistent resource fails."""
         with pytest.raises(ValueError, match="not found"):
-            await sql_store.update_data_resource_health("test-tenant", "nonexistent", "degraded")
+            await sql_store.update_data_resource_health(
+                "test-tenant", "nonexistent", "degraded"
+            )
 
     @pytest.mark.asyncio
     async def test_delete_snapshot_nonexistent(self, sql_store: SQLStore):
@@ -713,7 +716,9 @@ class TestSQLStoreMultipleEntityInteraction:
         await sql_store.create_operation(op)
 
         # VolumeSnapshot
-        snap = await sql_store.create_snapshot("tenant1", "snap-1", "pvc-1", "csi-class")
+        snap = await sql_store.create_snapshot(
+            "tenant1", "snap-1", "pvc-1", "csi-class"
+        )
 
         # DataProtectionPolicy
         policy = await sql_store.create_protection_policy(

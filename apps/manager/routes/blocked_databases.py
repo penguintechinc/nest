@@ -1,9 +1,10 @@
 """Blocked database management routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -15,11 +16,10 @@ blocked_bp = Blueprint("blocked_bp", __name__, url_prefix="/api/v1")
 @require_auth
 async def list_blocked_databases():
     """List all blocked database entries."""
+
     def _query():
         db = get_db()
-        rows = db(db.blocked_database.id > 0).select(
-            orderby=db.blocked_database.id
-        )
+        rows = db(db.blocked_database.id > 0).select(orderby=db.blocked_database.id)
         return [r.as_dict() for r in rows]
 
     blocks = await asyncio.to_thread(_query)
@@ -40,7 +40,6 @@ async def add_blocked_database():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         block_id = db.blocked_database.insert(
             db_name=body["db_name"],
@@ -59,6 +58,7 @@ async def add_blocked_database():
 @require_auth
 async def get_blocked_database(block_id: int):
     """Get a blocked database entry."""
+
     def _query():
         db = get_db()
         row = db.blocked_database[block_id]
@@ -74,6 +74,7 @@ async def get_blocked_database(block_id: int):
 @require_role("admin")
 async def remove_blocked_database(block_id: int):
     """Remove a database block entry."""
+
     def _delete():
         db = get_db()
         row = db.blocked_database[block_id]

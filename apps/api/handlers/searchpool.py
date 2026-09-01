@@ -1,12 +1,10 @@
 """SearchPool handlers for SearchPool CRs in nest-search namespace."""
+
 import asyncio
 import uuid
-from datetime import datetime, timezone
 
-from quart import jsonify, request, g
-from werkzeug.exceptions import BadRequest, NotFound
-
-from middleware import get_tenant, get_claims, emit_audit, AuditEvent
+from middleware import AuditEvent, emit_audit, get_claims
+from quart import g, jsonify, request
 from store import Store
 
 
@@ -22,16 +20,26 @@ async def list_search_pools(store: Store):
         # For P1, return mock search pools from store
         search_pools = await store.list_search_pools()
 
-        return jsonify({
-            "searchPools": [sp.to_dict() for sp in search_pools],
-            "meta": {"count": len(search_pools), "version": 1}
-        }), 200
+        return (
+            jsonify(
+                {
+                    "searchPools": [sp.to_dict() for sp in search_pools],
+                    "meta": {"count": len(search_pools), "version": 1},
+                }
+            ),
+            200,
+        )
     except Exception as e:
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def create_search_pool(store: Store):
@@ -45,22 +53,32 @@ async def create_search_pool(store: Store):
     try:
         req = await request.get_json() or {}
     except Exception as e:
-        return jsonify({
-            "code": "nest.api.invalid_request",
-            "message": str(e),
-            "requestId": request_id,
-        }), 400
+        return (
+            jsonify(
+                {
+                    "code": "nest.api.invalid_request",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
 
     # Validate required fields
     name = req.get("name", "").strip()
     replicas = req.get("replicas", 1)
 
     if not name:
-        return jsonify({
-            "code": "nest.api.validation_error",
-            "message": "name is required",
-            "requestId": request_id,
-        }), 400
+        return (
+            jsonify(
+                {
+                    "code": "nest.api.validation_error",
+                    "message": "name is required",
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
 
     try:
         search_pool = await store.create_search_pool(
@@ -69,16 +87,18 @@ async def create_search_pool(store: Store):
         )
 
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="searchpool.created",
-                tenant="admin",
-                subject=claims.sub if claims else "",
-                resource="SearchPool",
-                resource_name=name,
-                action="create",
-                outcome="success",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="searchpool.created",
+                    tenant="admin",
+                    subject=claims.sub if claims else "",
+                    resource="SearchPool",
+                    resource_name=name,
+                    action="create",
+                    outcome="success",
+                    request_id=request_id,
+                )
+            )
         )
 
         op_id = str(uuid.uuid4())
@@ -88,40 +108,54 @@ async def create_search_pool(store: Store):
         return response
     except ValueError as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="searchpool.created",
-                tenant="admin",
-                subject=claims.sub if claims else "",
-                resource="SearchPool",
-                resource_name=name,
-                action="create",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="searchpool.created",
+                    tenant="admin",
+                    subject=claims.sub if claims else "",
+                    resource="SearchPool",
+                    resource_name=name,
+                    action="create",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.searchpool.already_exists",
-            "message": str(e),
-            "requestId": request_id,
-        }), 409
+        return (
+            jsonify(
+                {
+                    "code": "nest.searchpool.already_exists",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            409,
+        )
     except Exception as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="searchpool.created",
-                tenant="admin",
-                subject=claims.sub if claims else "",
-                resource="SearchPool",
-                resource_name=name,
-                action="create",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="searchpool.created",
+                    tenant="admin",
+                    subject=claims.sub if claims else "",
+                    resource="SearchPool",
+                    resource_name=name,
+                    action="create",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def get_search_pool(store: Store):
@@ -136,17 +170,27 @@ async def get_search_pool(store: Store):
         search_pool = await store.get_search_pool(name)
         return jsonify(search_pool.to_dict()), 200
     except ValueError:
-        return jsonify({
-            "code": "nest.searchpool.not_found",
-            "message": "SearchPool not found",
-            "requestId": request_id,
-        }), 404
+        return (
+            jsonify(
+                {
+                    "code": "nest.searchpool.not_found",
+                    "message": "SearchPool not found",
+                    "requestId": request_id,
+                }
+            ),
+            404,
+        )
     except Exception as e:
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )
 
 
 async def delete_search_pool(store: Store):
@@ -161,51 +205,67 @@ async def delete_search_pool(store: Store):
     try:
         await store.delete_search_pool(name)
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="searchpool.deleted",
-                tenant="admin",
-                subject=claims.sub if claims else "",
-                resource="SearchPool",
-                resource_name=name,
-                action="delete",
-                outcome="success",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="searchpool.deleted",
+                    tenant="admin",
+                    subject=claims.sub if claims else "",
+                    resource="SearchPool",
+                    resource_name=name,
+                    action="delete",
+                    outcome="success",
+                    request_id=request_id,
+                )
+            )
         )
         return "", 204
     except ValueError:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="searchpool.deleted",
-                tenant="admin",
-                subject=claims.sub if claims else "",
-                resource="SearchPool",
-                resource_name=name,
-                action="delete",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="searchpool.deleted",
+                    tenant="admin",
+                    subject=claims.sub if claims else "",
+                    resource="SearchPool",
+                    resource_name=name,
+                    action="delete",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.searchpool.not_found",
-            "message": "SearchPool not found",
-            "requestId": request_id,
-        }), 404
+        return (
+            jsonify(
+                {
+                    "code": "nest.searchpool.not_found",
+                    "message": "SearchPool not found",
+                    "requestId": request_id,
+                }
+            ),
+            404,
+        )
     except Exception as e:
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="searchpool.deleted",
-                tenant="admin",
-                subject=claims.sub if claims else "",
-                resource="SearchPool",
-                resource_name=name,
-                action="delete",
-                outcome="failure",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="searchpool.deleted",
+                    tenant="admin",
+                    subject=claims.sub if claims else "",
+                    resource="SearchPool",
+                    resource_name=name,
+                    action="delete",
+                    outcome="failure",
+                    request_id=request_id,
+                )
+            )
         )
-        return jsonify({
-            "code": "nest.internal",
-            "message": str(e),
-            "requestId": request_id,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "code": "nest.internal",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            500,
+        )

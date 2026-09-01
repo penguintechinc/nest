@@ -3,9 +3,8 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from quart import jsonify, request, g
-
 from models import OperationRecord
+from quart import g, jsonify, request
 from store.store import OperationStore
 
 
@@ -60,22 +59,27 @@ async def create_operation(store: OperationStore) -> tuple[dict, int]:
 
     try:
         await store.create_operation(operation)
-        return jsonify({
-            "status": "success",
-            "operation": {
-                "id": operation.id,
-                "tenant": operation.tenant,
-                "resourceName": operation.resource_name,
-                "resourceType": operation.resource_type,
-                "operationType": operation.operation_type,
-                "phase": operation.phase,
-                "message": operation.message,
-                "createdAt": operation.created_at,
-                "updatedAt": operation.updated_at,
-                "error": operation.error,
-                "progress": operation.progress,
-            },
-        }), 201
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "operation": {
+                        "id": operation.id,
+                        "tenant": operation.tenant,
+                        "resourceName": operation.resource_name,
+                        "resourceType": operation.resource_type,
+                        "operationType": operation.operation_type,
+                        "phase": operation.phase,
+                        "message": operation.message,
+                        "createdAt": operation.created_at,
+                        "updatedAt": operation.updated_at,
+                        "error": operation.error,
+                        "progress": operation.progress,
+                    },
+                }
+            ),
+            201,
+        )
     except ValueError as e:
         return jsonify({"error": str(e)}), 409
     except Exception as e:
@@ -85,7 +89,6 @@ async def create_operation(store: OperationStore) -> tuple[dict, int]:
 async def cancel_operation(store: OperationStore, op_id: str) -> tuple[dict, int]:
     """Cancel an operation (stub implementation for P1)."""
     try:
-        from quart import g
         # Get all operations and find the one with this ID
         # This is a stub - proper implementation would require tenant context
         return jsonify({"status": "accepted"}), 202

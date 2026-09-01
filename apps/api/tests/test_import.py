@@ -1,16 +1,11 @@
 """Tests for import/export handlers."""
-import pytest
+
 from datetime import datetime
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch
 from uuid import UUID
 
+import pytest
 from app import create_app
-from handlers.import_handler import (
-    snapshot_data_resource,
-    restore_data_resource,
-    introspect_imported_resource,
-    migrate_to_managed,
-)
 from models import DataResourceRecord
 from store.store import MemoryStore
 
@@ -437,9 +432,7 @@ class TestIntrospectImportedResource:
         assert data["reachable"] is False
 
     @pytest.mark.asyncio
-    async def test_introspect_uses_import_conn_str(
-        self, shared_client, bearer_token
-    ):
+    async def test_introspect_uses_import_conn_str(self, shared_client, bearer_token):
         """Test introspect prefers import_conn_str over external_endpoint."""
         dr = DataResourceRecord(
             id="dr-conn-preference-id",

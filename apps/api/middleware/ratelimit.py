@@ -1,4 +1,5 @@
 """Per-tenant token-bucket rate limiter."""
+
 import asyncio
 import math
 import os
@@ -69,7 +70,9 @@ async def check_rate_limit() -> None:
 
         remaining = max(0.0, bucket.tokens - 1.0)
         # Seconds until at least one token is available.
-        retry_after = math.ceil((1.0 - bucket.tokens) / _PER_SECOND) if bucket.tokens < 1.0 else 0
+        retry_after = (
+            math.ceil((1.0 - bucket.tokens) / _PER_SECOND) if bucket.tokens < 1.0 else 0
+        )
         reset_epoch = int(time.time() + retry_after)
 
         # Store for after_request hook regardless of outcome.

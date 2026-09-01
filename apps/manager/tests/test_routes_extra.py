@@ -1,12 +1,15 @@
 """Additional route tests covering stats, audit, and database_servers endpoints."""
+
 import os
 import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 os.environ.setdefault("JWT_SECRET", "test-secret-key")
+
 
 # Helper functions
 def _make_db(count=0):
@@ -15,10 +18,13 @@ def _make_db(count=0):
     db.count = MagicMock(return_value=count)
     return db
 
+
 def _make_token(role="admin"):
     """Create a valid JWT token for testing."""
     from utils.auth import create_token
+
     return create_token(user_id=1, email="test@example.com", role=role)
+
 
 _GET_DB_EXTRA = [
     "routes.stats.get_db",
@@ -70,10 +76,21 @@ def db():
     mock = _make_db(count=0)
     # Override all table mocks with comparison-operator-aware versions
     for tbl_name in (
-        "audit_log", "managed_database", "user_permission", "threat_indicator",
-        "threat_intel_feed", "security_rule", "blocked_database", "sql_file",
-        "temporary_access", "cloud_provider", "scaling_policy", "user_profile",
-        "teams", "team_memberships", "database_server",
+        "audit_log",
+        "managed_database",
+        "user_permission",
+        "threat_indicator",
+        "threat_intel_feed",
+        "security_rule",
+        "blocked_database",
+        "sql_file",
+        "temporary_access",
+        "cloud_provider",
+        "scaling_policy",
+        "user_profile",
+        "teams",
+        "team_memberships",
+        "database_server",
     ):
         setattr(mock, tbl_name, _table_mock())
 
@@ -88,6 +105,7 @@ def db():
 # ===========================================================================
 # GET /api/v1/status  (stats.py — no auth)
 # ===========================================================================
+
 
 @pytest.mark.asyncio
 async def test_status_no_auth(client):
@@ -110,6 +128,7 @@ async def test_status_status_ok(client):
 # ===========================================================================
 # GET /api/v1/stats  (stats.py — auth required)
 # ===========================================================================
+
 
 @pytest.mark.asyncio
 async def test_stats_authenticated(client, db):
@@ -135,6 +154,7 @@ async def test_stats_unauthenticated(client):
 # ===========================================================================
 # GET /api/v1/audit-log  (audit.py — auth required)
 # ===========================================================================
+
 
 @pytest.mark.asyncio
 async def test_audit_log_authenticated(client, db):
@@ -212,9 +232,17 @@ async def test_audit_log_invalid_page_clamped(client, db):
 # GET /api/v1/servers/<id>  (database_servers.py)
 # ===========================================================================
 
+
 @pytest.mark.asyncio
 async def test_get_server_found(client, db):
-    server_dict = {"id": 1, "name": "pg", "host": "db.local", "port": 5432, "db_type": "pg", "active": True}
+    server_dict = {
+        "id": 1,
+        "name": "pg",
+        "host": "db.local",
+        "port": 5432,
+        "db_type": "pg",
+        "active": True,
+    }
     server_row = MagicMock()
     server_row.as_dict.return_value = server_dict
     db.database_server.__getitem__ = MagicMock(return_value=server_row)
@@ -249,6 +277,7 @@ async def test_get_server_unauthenticated(client):
 # PUT /api/v1/servers/<id>
 # ===========================================================================
 
+
 @pytest.mark.asyncio
 async def test_update_server_not_found(client, db):
     db.database_server.__getitem__ = MagicMock(return_value=None)
@@ -277,7 +306,14 @@ async def test_update_server_no_body(client, db):
 
 @pytest.mark.asyncio
 async def test_update_server_success(client, db):
-    server_dict = {"id": 1, "name": "updated", "host": "db.local", "port": 5432, "db_type": "pg", "active": True}
+    server_dict = {
+        "id": 1,
+        "name": "updated",
+        "host": "db.local",
+        "port": 5432,
+        "db_type": "pg",
+        "active": True,
+    }
     server_row = MagicMock()
     server_row.as_dict.return_value = server_dict
     db.database_server.__getitem__ = MagicMock(return_value=server_row)
@@ -294,6 +330,7 @@ async def test_update_server_success(client, db):
 # ===========================================================================
 # DELETE /api/v1/servers/<id>  (requires admin)
 # ===========================================================================
+
 
 @pytest.mark.asyncio
 async def test_delete_server_success(client, db):

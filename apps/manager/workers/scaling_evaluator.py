@@ -2,6 +2,7 @@
 Scaling Evaluator Worker.
 Reads health metrics, evaluates scaling policies, triggers cloud scale operations.
 """
+
 import asyncio
 import logging
 import os
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 SCALING_EVAL_INTERVAL = int(os.environ.get("SCALING_EVAL_INTERVAL", "120"))
+
 
 async def evaluate_policy(policy: dict, db) -> None:
     """Evaluate a single scaling policy and trigger if threshold met."""
@@ -21,10 +23,11 @@ async def evaluate_policy(policy: dict, db) -> None:
     current_value = None
     try:
         import redis.asyncio as aioredis
+
         r = aioredis.Redis(
             host=os.environ.get("REDIS_HOST", "redis"),
             port=int(os.environ.get("REDIS_PORT", "6379")),
-            decode_responses=True
+            decode_responses=True,
         )
         val = await r.get(f"nest:server:{server_id}:metric:{metric}")
         await r.close()
@@ -55,9 +58,12 @@ async def evaluate_policy(policy: dict, db) -> None:
                 )
             )
             await asyncio.to_thread(db.commit)
-            logger.info(f"Scaling event triggered: server={server_id} type={event_type} metric={current_value}")
+            logger.info(
+                f"Scaling event triggered: server={server_id} type={event_type} metric={current_value}"
+            )
         except Exception as e:
             logger.error(f"Failed to record scaling event: {e}")
+
 
 async def scaling_evaluator_loop(db) -> None:
     """Main scaling evaluator loop - runs indefinitely."""
@@ -65,9 +71,9 @@ async def scaling_evaluator_loop(db) -> None:
     while True:
         try:
             policies = await asyncio.to_thread(
-                lambda: db(db.scaling_policy.active == True).select(
-                    db.scaling_policy.ALL
-                ).as_list()
+                lambda: db(db.scaling_policy.active == True)
+                .select(db.scaling_policy.ALL)
+                .as_list()
             )
             for policy in policies:
                 await evaluate_policy(policy, db)

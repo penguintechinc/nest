@@ -1,12 +1,13 @@
 """Cost report handler — proxies to nest-cost-calculator service."""
+
 import os
 import uuid
 from typing import Any
 
 import aiohttp
-from quart import jsonify, g
-from werkzeug.exceptions import Forbidden
 from middleware import get_tenant
+from quart import g, jsonify
+from werkzeug.exceptions import Forbidden
 
 _COST_CALCULATOR_URL = os.environ.get(
     "COST_CALCULATOR_URL",

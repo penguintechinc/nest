@@ -1,14 +1,16 @@
 """Unit tests for utility modules."""
+
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from utils.redis_sync import (
-    sync_to_redis,
-    sync_security_config_to_redis,
+    CACHE_TTL,
     DB_PROXY_ROUTES_KEY,
     DB_PROXY_SECURITY_KEY,
-    CACHE_TTL,
+    sync_security_config_to_redis,
+    sync_to_redis,
 )
 
 
@@ -42,9 +44,27 @@ class TestRedisSyncUtils:
     def test_sync_to_redis_with_servers(self):
         """Test sync_to_redis with multiple server types."""
         servers = [
-            {"id": 1, "db_type": "postgresql", "host": "pg1.local", "port": 5432, "tenant_id": "tenant-1"},
-            {"id": 2, "db_type": "mysql", "host": "mysql1.local", "port": 3306, "tenant_id": "tenant-1"},
-            {"id": 3, "db_type": "redis", "host": "redis1.local", "port": 6379, "tenant_id": "tenant-1"},
+            {
+                "id": 1,
+                "db_type": "postgresql",
+                "host": "pg1.local",
+                "port": 5432,
+                "tenant_id": "tenant-1",
+            },
+            {
+                "id": 2,
+                "db_type": "mysql",
+                "host": "mysql1.local",
+                "port": 3306,
+                "tenant_id": "tenant-1",
+            },
+            {
+                "id": 3,
+                "db_type": "redis",
+                "host": "redis1.local",
+                "port": 6379,
+                "tenant_id": "tenant-1",
+            },
         ]
         mock_db = MagicMock()
         mock_db.return_value.select.return_value.as_list.return_value = servers
@@ -80,7 +100,9 @@ class TestRedisSyncUtils:
 
     def test_sync_to_redis_redis_connection_error(self):
         """Test sync_to_redis handles Redis connection errors gracefully."""
-        servers = [{"id": 1, "db_type": "postgresql", "host": "pg1.local", "port": 5432}]
+        servers = [
+            {"id": 1, "db_type": "postgresql", "host": "pg1.local", "port": 5432}
+        ]
         mock_db = MagicMock()
         mock_db.return_value.select.return_value.as_list.return_value = servers
 
@@ -98,6 +120,7 @@ class TestRedisSyncUtils:
 
     def test_sync_security_config_to_redis_no_blocked(self):
         """Test sync_security_config_to_redis with no blocked resources."""
+
         async def run_test():
             with patch("asyncio.to_thread") as mock_to_thread:
                 mock_to_thread.return_value = []

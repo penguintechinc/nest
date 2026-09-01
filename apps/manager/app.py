@@ -2,16 +2,13 @@
 
 import asyncio
 from typing import Any
-from werkzeug.exceptions import Unauthorized, Forbidden
-
-from prometheus_client import Counter, Histogram, generate_latest, REGISTRY
-from quart import Quart, g, jsonify, request
 
 import grpc_server
 import worker
 from handlers import internal, operations
-from middleware.tenant import tenant_middleware, parse_token
-from store import create_operation_store, OperationStore
+from middleware.tenant import parse_token, tenant_middleware
+from prometheus_client import REGISTRY, Counter, Histogram, generate_latest
+from quart import Quart, g, jsonify, request
 from routes import (
     analytics_bp,
     audit_bp,
@@ -32,6 +29,8 @@ from routes import (
     temp_access_bp,
     threat_intel_bp,
 )
+from store import OperationStore, create_operation_store
+from werkzeug.exceptions import Forbidden, Unauthorized
 
 
 def _register_metric_safe(metric_class: type, *args: Any, **kwargs: Any) -> Any:
@@ -51,7 +50,9 @@ def _register_metric_safe(metric_class: type, *args: Any, **kwargs: Any) -> Any:
     metric_name: str | None = args[0] if args else kwargs.get("name")
     # Prometheus normalization: Counter names ending with "_total" have suffix stripped
     normalized_name = (
-        metric_name.rstrip("_total") if metric_name and metric_name.endswith("_total") else metric_name
+        metric_name.rstrip("_total")
+        if metric_name and metric_name.endswith("_total")
+        else metric_name
     )
 
     # Check if the metric already exists in the registry

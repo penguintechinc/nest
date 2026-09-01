@@ -8,25 +8,26 @@ Handles certificate authority (CA) and certificate lifecycle management includin
 - RBAC-enforced access control
 """
 
-import logging
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
 import base64
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from lib.ca_manager import CAManager, CAManagerException
+from lib.ca_manager import CAManager
 from lib.k8s_client import KubernetesClient, KubernetesClientException
-
 
 logger = logging.getLogger(__name__)
 
 
 class CertificateAccessDenied(Exception):
     """Exception raised when user lacks required permissions"""
+
     pass
 
 
 class CertificateNotFound(Exception):
     """Exception raised when certificate or CA not found"""
+
     pass
 
 
@@ -65,13 +66,17 @@ class CertificatesController:
             True if user is global admin, False otherwise
         """
         # Get user's global team membership
-        membership = self.db(
-            (self.db.team_memberships.user_id == user_id) &
-            (self.db.teams.is_global == True) &
-            (self.db.team_memberships.team_id == self.db.teams.id)
-        ).select(self.db.team_memberships.role).first()
+        membership = (
+            self.db(
+                (self.db.team_memberships.user_id == user_id)
+                & (self.db.teams.is_global == True)
+                & (self.db.team_memberships.team_id == self.db.teams.id)
+            )
+            .select(self.db.team_memberships.role)
+            .first()
+        )
 
-        return membership and membership.role == 'admin'
+        return membership and membership.role == "admin"
 
     def _get_user_team_role(self, user_id: int, team_id: int) -> Optional[str]:
         """
@@ -84,10 +89,14 @@ class CertificatesController:
         Returns:
             User's role (admin, member, viewer) or None if not member
         """
-        membership = self.db(
-            (self.db.team_memberships.user_id == user_id) &
-            (self.db.team_memberships.team_id == team_id)
-        ).select(self.db.team_memberships.role).first()
+        membership = (
+            self.db(
+                (self.db.team_memberships.user_id == user_id)
+                & (self.db.team_memberships.team_id == team_id)
+            )
+            .select(self.db.team_memberships.role)
+            .first()
+        )
 
         return membership.role if membership else None
 
@@ -119,7 +128,7 @@ class CertificatesController:
             return  # Global admin can do everything
 
         role = self._get_user_team_role(user_id, team_id)
-        if role != 'admin':
+        if role != "admin":
             raise CertificateAccessDenied(
                 "User must be team admin or global admin to manage certificates"
             )
@@ -149,7 +158,7 @@ class CertificatesController:
         resource_type: str,
         resource_id: Optional[int] = None,
         team_id: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Create an audit log entry.
@@ -169,7 +178,7 @@ class CertificatesController:
                 resource_type=resource_type,
                 resource_id=resource_id,
                 team_id=team_id,
-                details=details
+                details=details,
             )
             self.db.commit()
         except Exception as e:
@@ -188,7 +197,7 @@ class CertificatesController:
         country: str = "US",
         state: str = "CA",
         locality: str = "San Francisco",
-        validity_days: int = 3650
+        validity_days: int = 3650,
     ) -> Dict[str, Any]:
         """
         Create a new internal Certificate Authority.
@@ -216,7 +225,7 @@ class CertificatesController:
 
         try:
             # Generate CA certificate
-            if ca_type == 'root':
+            if ca_type == "root":
                 cert_data = self.ca_manager.generate_root_ca(
                     common_name=common_name,
                     organization=organization,
@@ -224,9 +233,9 @@ class CertificatesController:
                     country=country,
                     state=state,
                     locality=locality,
-                    validity_days=validity_days
+                    validity_days=validity_days,
                 )
-            elif ca_type == 'intermediate':
+            elif ca_type == "intermediate":
                 cert_data = self.ca_manager.generate_intermediate_ca(
                     common_name=common_name,
                     organization=organization,
@@ -234,54 +243,54 @@ class CertificatesController:
                     country=country,
                     state=state,
                     locality=locality,
-                    validity_days=validity_days
+                    validity_days=validity_days,
                 )
             else:
                 raise ValueError(f"Invalid CA type: {ca_type}")
 
             # Extract certificate details
-            cert_obj = self.ca_manager.parse_certificate(cert_data['certificate'])
+            cert_obj = self.ca_manager.parse_certificate(cert_data["certificate"])
 
             # Store in database
             ca_id = self.db.certificate_authorities.insert(
                 name=name,
                 type=ca_type,
-                certificate=cert_data['certificate'],
-                private_key=cert_data['private_key'],
+                certificate=cert_data["certificate"],
+                private_key=cert_data["private_key"],
                 subject=self.ca_manager.get_certificate_subject(cert_obj),
                 issuer=self.ca_manager.get_certificate_issuer(cert_obj),
                 valid_from=self.ca_manager.get_certificate_not_before(cert_obj),
                 valid_until=self.ca_manager.get_certificate_not_after(cert_obj),
-                serial_number=str(self.ca_manager.get_certificate_serial_number(cert_obj)),
+                serial_number=str(
+                    self.ca_manager.get_certificate_serial_number(cert_obj)
+                ),
                 is_nest_managed=True,
-                created_by=user_id
+                created_by=user_id,
             )
             self.db.commit()
 
             # Create audit log
             self._create_audit_log(
                 user_id=user_id,
-                action='ca_created',
-                resource_type='certificate_authority',
+                action="ca_created",
+                resource_type="certificate_authority",
                 resource_id=ca_id,
-                details={
-                    'name': name,
-                    'type': ca_type,
-                    'common_name': common_name
-                }
+                details={"name": name, "type": ca_type, "common_name": common_name},
             )
 
             logger.info(f"Created {ca_type} CA '{name}' with ID {ca_id}")
 
             return {
-                'id': ca_id,
-                'name': name,
-                'type': ca_type,
-                'subject': self.ca_manager.get_certificate_subject(cert_obj),
-                'issuer': self.ca_manager.get_certificate_issuer(cert_obj),
-                'valid_from': self.ca_manager.get_certificate_not_before(cert_obj),
-                'valid_until': self.ca_manager.get_certificate_not_after(cert_obj),
-                'serial_number': str(self.ca_manager.get_certificate_serial_number(cert_obj))
+                "id": ca_id,
+                "name": name,
+                "type": ca_type,
+                "subject": self.ca_manager.get_certificate_subject(cert_obj),
+                "issuer": self.ca_manager.get_certificate_issuer(cert_obj),
+                "valid_from": self.ca_manager.get_certificate_not_before(cert_obj),
+                "valid_until": self.ca_manager.get_certificate_not_after(cert_obj),
+                "serial_number": str(
+                    self.ca_manager.get_certificate_serial_number(cert_obj)
+                ),
             }
 
         except Exception as e:
@@ -294,7 +303,7 @@ class CertificatesController:
         ca_type: str,
         certificate_pem: str,
         private_key_pem: Optional[str],
-        user_id: int
+        user_id: int,
     ) -> Dict[str, Any]:
         """
         Import an existing Certificate Authority.
@@ -329,32 +338,36 @@ class CertificatesController:
                 issuer=self.ca_manager.get_certificate_issuer(cert_obj),
                 valid_from=self.ca_manager.get_certificate_not_before(cert_obj),
                 valid_until=self.ca_manager.get_certificate_not_after(cert_obj),
-                serial_number=str(self.ca_manager.get_certificate_serial_number(cert_obj)),
+                serial_number=str(
+                    self.ca_manager.get_certificate_serial_number(cert_obj)
+                ),
                 is_nest_managed=False,
-                created_by=user_id
+                created_by=user_id,
             )
             self.db.commit()
 
             # Create audit log
             self._create_audit_log(
                 user_id=user_id,
-                action='ca_imported',
-                resource_type='certificate_authority',
+                action="ca_imported",
+                resource_type="certificate_authority",
                 resource_id=ca_id,
-                details={'name': name, 'type': ca_type}
+                details={"name": name, "type": ca_type},
             )
 
             logger.info(f"Imported {ca_type} CA '{name}' with ID {ca_id}")
 
             return {
-                'id': ca_id,
-                'name': name,
-                'type': ca_type,
-                'subject': self.ca_manager.get_certificate_subject(cert_obj),
-                'issuer': self.ca_manager.get_certificate_issuer(cert_obj),
-                'valid_from': self.ca_manager.get_certificate_not_before(cert_obj),
-                'valid_until': self.ca_manager.get_certificate_not_after(cert_obj),
-                'serial_number': str(self.ca_manager.get_certificate_serial_number(cert_obj))
+                "id": ca_id,
+                "name": name,
+                "type": ca_type,
+                "subject": self.ca_manager.get_certificate_subject(cert_obj),
+                "issuer": self.ca_manager.get_certificate_issuer(cert_obj),
+                "valid_from": self.ca_manager.get_certificate_not_before(cert_obj),
+                "valid_until": self.ca_manager.get_certificate_not_after(cert_obj),
+                "serial_number": str(
+                    self.ca_manager.get_certificate_serial_number(cert_obj)
+                ),
             }
 
         except Exception as e:
@@ -380,15 +393,15 @@ class CertificatesController:
 
         return [
             {
-                'id': ca.id,
-                'name': ca.name,
-                'type': ca.type,
-                'subject': ca.subject,
-                'issuer': ca.issuer,
-                'valid_from': ca.valid_from,
-                'valid_until': ca.valid_until,
-                'is_nest_managed': ca.is_nest_managed,
-                'created_at': ca.created_at
+                "id": ca.id,
+                "name": ca.name,
+                "type": ca.type,
+                "subject": ca.subject,
+                "issuer": ca.issuer,
+                "valid_from": ca.valid_from,
+                "valid_until": ca.valid_until,
+                "is_nest_managed": ca.is_nest_managed,
+                "created_at": ca.created_at,
             }
             for ca in cas
         ]
@@ -415,18 +428,18 @@ class CertificatesController:
             raise CertificateNotFound(f"CA {ca_id} not found")
 
         return {
-            'id': ca.id,
-            'name': ca.name,
-            'type': ca.type,
-            'subject': ca.subject,
-            'issuer': ca.issuer,
-            'valid_from': ca.valid_from,
-            'valid_until': ca.valid_until,
-            'is_nest_managed': ca.is_nest_managed,
-            'created_by': ca.created_by,
-            'created_at': ca.created_at,
-            'updated_at': ca.updated_at,
-            'certificate': ca.certificate
+            "id": ca.id,
+            "name": ca.name,
+            "type": ca.type,
+            "subject": ca.subject,
+            "issuer": ca.issuer,
+            "valid_from": ca.valid_from,
+            "valid_until": ca.valid_until,
+            "is_nest_managed": ca.is_nest_managed,
+            "created_by": ca.created_by,
+            "created_at": ca.created_at,
+            "updated_at": ca.updated_at,
+            "certificate": ca.certificate,
         }
 
     def delete_ca(self, ca_id: int, user_id: int) -> None:
@@ -452,8 +465,8 @@ class CertificatesController:
 
         # Check for dependent certificates
         dependent_certs = self.db(
-            (self.db.certificates.ca_id == ca_id) &
-            (self.db.certificates.deleted_at == None)
+            (self.db.certificates.ca_id == ca_id)
+            & (self.db.certificates.deleted_at == None)
         ).count()
 
         if dependent_certs > 0:
@@ -468,10 +481,10 @@ class CertificatesController:
         # Create audit log
         self._create_audit_log(
             user_id=user_id,
-            action='ca_deleted',
-            resource_type='certificate_authority',
+            action="ca_deleted",
+            resource_type="certificate_authority",
             resource_id=ca_id,
-            details={'name': ca.name}
+            details={"name": ca.name},
         )
 
         logger.info(f"Deleted CA {ca_id}")
@@ -507,7 +520,7 @@ class CertificatesController:
         auto_renew: bool = True,
         renewal_threshold_days: int = 30,
         validity_days: int = 365,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Generate a certificate for a resource.
@@ -559,12 +572,14 @@ class CertificatesController:
                 if self.k8s_client:
                     try:
                         service = self.k8s_client.get_service(
-                            resource.k8s_namespace,
-                            resource.k8s_resource_name
+                            resource.k8s_namespace, resource.k8s_resource_name
                         )
                         # Extract LoadBalancer IP if available
-                        if service.status and service.status.load_balancer and \
-                           service.status.load_balancer.ingress:
+                        if (
+                            service.status
+                            and service.status.load_balancer
+                            and service.status.load_balancer.ingress
+                        ):
                             for ingress in service.status.load_balancer.ingress:
                                 if ingress.ip:
                                     san_ips.append(ingress.ip)
@@ -578,26 +593,28 @@ class CertificatesController:
                 common_name=common_name,
                 san_dns=san_dns,
                 san_ips=san_ips,
-                validity_days=validity_days
+                validity_days=validity_days,
             )
 
             # Parse certificate for metadata
-            cert_obj = self.ca_manager.parse_certificate(cert_data['certificate'])
+            cert_obj = self.ca_manager.parse_certificate(cert_data["certificate"])
 
             # Store in database
             cert_id = self.db.certificates.insert(
                 resource_id=resource_id,
                 ca_id=ca_id,
-                certificate=cert_data['certificate'],
-                private_key=cert_data['private_key'],
+                certificate=cert_data["certificate"],
+                private_key=cert_data["private_key"],
                 common_name=common_name,
                 san_dns=san_dns,
                 san_ips=san_ips,
                 valid_from=self.ca_manager.get_certificate_not_before(cert_obj),
                 valid_until=self.ca_manager.get_certificate_not_after(cert_obj),
-                serial_number=str(self.ca_manager.get_certificate_serial_number(cert_obj)),
+                serial_number=str(
+                    self.ca_manager.get_certificate_serial_number(cert_obj)
+                ),
                 auto_renew=auto_renew,
-                renewal_threshold_days=renewal_threshold_days
+                renewal_threshold_days=renewal_threshold_days,
             )
 
             # Update resource with certificate reference
@@ -607,38 +624,36 @@ class CertificatesController:
             # Create Kubernetes Secret if applicable
             if resource.k8s_namespace and self.k8s_client:
                 self._create_k8s_secret(
-                    resource,
-                    cert_data['certificate'],
-                    cert_data['private_key']
+                    resource, cert_data["certificate"], cert_data["private_key"]
                 )
 
             # Create audit log
             self._create_audit_log(
                 user_id=user_id,
-                action='certificate_generated',
-                resource_type='certificate',
+                action="certificate_generated",
+                resource_type="certificate",
                 resource_id=cert_id,
                 team_id=resource.team_id,
                 details={
-                    'resource_id': resource_id,
-                    'ca_id': ca_id,
-                    'common_name': common_name,
-                    'auto_renew': auto_renew
-                }
+                    "resource_id": resource_id,
+                    "ca_id": ca_id,
+                    "common_name": common_name,
+                    "auto_renew": auto_renew,
+                },
             )
 
             logger.info(f"Generated certificate {cert_id} for resource {resource_id}")
 
             return {
-                'id': cert_id,
-                'resource_id': resource_id,
-                'ca_id': ca_id,
-                'common_name': common_name,
-                'san_dns': san_dns,
-                'san_ips': san_ips,
-                'valid_from': self.ca_manager.get_certificate_not_before(cert_obj),
-                'valid_until': self.ca_manager.get_certificate_not_after(cert_obj),
-                'auto_renew': auto_renew
+                "id": cert_id,
+                "resource_id": resource_id,
+                "ca_id": ca_id,
+                "common_name": common_name,
+                "san_dns": san_dns,
+                "san_ips": san_ips,
+                "valid_from": self.ca_manager.get_certificate_not_before(cert_obj),
+                "valid_until": self.ca_manager.get_certificate_not_after(cert_obj),
+                "auto_renew": auto_renew,
             }
 
         except Exception as e:
@@ -667,20 +682,20 @@ class CertificatesController:
         self._check_certificate_view(user_id, resource.team_id)
 
         certs = self.db(
-            (self.db.certificates.resource_id == resource_id) &
-            (self.db.certificates.deleted_at == None)
+            (self.db.certificates.resource_id == resource_id)
+            & (self.db.certificates.deleted_at == None)
         ).select()
 
         return [
             {
-                'id': cert.id,
-                'common_name': cert.common_name,
-                'san_dns': cert.san_dns,
-                'san_ips': cert.san_ips,
-                'valid_from': cert.valid_from,
-                'valid_until': cert.valid_until,
-                'auto_renew': cert.auto_renew,
-                'created_at': cert.created_at
+                "id": cert.id,
+                "common_name": cert.common_name,
+                "san_dns": cert.san_dns,
+                "san_ips": cert.san_ips,
+                "valid_from": cert.valid_from,
+                "valid_until": cert.valid_until,
+                "auto_renew": cert.auto_renew,
+                "created_at": cert.created_at,
             }
             for cert in certs
         ]
@@ -715,7 +730,7 @@ class CertificatesController:
                 common_name=cert.common_name,
                 auto_renew=cert.auto_renew,
                 renewal_threshold_days=cert.renewal_threshold_days,
-                user_id=user_id
+                user_id=user_id,
             )
 
             # Soft delete old certificate
@@ -725,11 +740,11 @@ class CertificatesController:
             # Create audit log
             self._create_audit_log(
                 user_id=user_id,
-                action='certificate_renewed',
-                resource_type='certificate',
-                resource_id=result['id'],
+                action="certificate_renewed",
+                resource_type="certificate",
+                resource_id=result["id"],
                 team_id=resource.team_id,
-                details={'previous_cert_id': cert_id}
+                details={"previous_cert_id": cert_id},
             )
 
             logger.info(f"Renewed certificate {cert_id}, new ID: {result['id']}")
@@ -771,10 +786,10 @@ class CertificatesController:
             # Create audit log
             self._create_audit_log(
                 user_id=user_id,
-                action='certificate_revoked',
-                resource_type='certificate',
+                action="certificate_revoked",
+                resource_type="certificate",
                 resource_id=cert_id,
-                team_id=resource.team_id
+                team_id=resource.team_id,
             )
 
             logger.info(f"Revoked certificate {cert_id}")
@@ -786,10 +801,7 @@ class CertificatesController:
     # ====== Kubernetes Helper Methods ======
 
     def _create_k8s_secret(
-        self,
-        resource,
-        certificate_pem: str,
-        private_key_pem: str
+        self, resource, certificate_pem: str, private_key_pem: str
     ) -> None:
         """
         Create a Kubernetes TLS Secret with certificate and key.
@@ -808,21 +820,15 @@ class CertificatesController:
         cert_b64 = base64.b64encode(certificate_pem.encode()).decode()
         key_b64 = base64.b64encode(private_key_pem.encode()).decode()
 
-        secret_data = {
-            'tls.crt': cert_b64,
-            'tls.key': key_b64
-        }
+        secret_data = {"tls.crt": cert_b64, "tls.key": key_b64}
 
         try:
             self.k8s_client.create_secret(
                 namespace=resource.k8s_namespace,
                 name=secret_name,
                 data=secret_data,
-                secret_type='kubernetes.io/tls',
-                labels={
-                    'app': resource.name,
-                    'managed-by': 'nest'
-                }
+                secret_type="kubernetes.io/tls",
+                labels={"app": resource.name, "managed-by": "nest"},
             )
             logger.info(f"Created K8s TLS secret '{secret_name}'")
         except KubernetesClientException as e:
