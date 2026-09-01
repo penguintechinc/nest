@@ -87,7 +87,7 @@ func (r *DBusGaneshaReloader) reloadViaSIGHUP() error {
 	// Find the process
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("Ganesha process (PID %d) not found: %w", pid, err)
+		return fmt.Errorf("failed to find Ganesha process (PID %d): %w", pid, err)
 	}
 
 	// Send SIGHUP

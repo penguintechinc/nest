@@ -120,7 +120,10 @@ jobs:
     - name: Run staticcheck
       uses: dominikh/staticcheck-action@fe1dd0c3658873b46f8c9bb3291096a617310ca6  # v1.3.1
       with:
-        version: "2023.1.7"
+        # 2023.1.7 cannot build or run under Go 1.25 (its x/tools dependency
+        # fails to compile); 2025.1.1 is the release that supports the 1.25
+        # toolchain this workflow now uses.
+        version: "2025.1.1"
         install-go: false
 
     - name: Run tests

@@ -66,7 +66,7 @@ func DiscoverLonghornVolumes(ctx context.Context, namespace string) ([]LonghornV
 	var volumes []LonghornVolume
 
 	// Build kubectl command
-	cmd := exec.CommandContext(ctx, "kubectl", "get", "pvc", "-o", "json")
+	var cmd *exec.Cmd
 	if namespace != "" {
 		cmd = exec.CommandContext(ctx, "kubectl", "get", "pvc", "-n", namespace, "-o", "json")
 	} else {

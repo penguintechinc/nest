@@ -37,7 +37,7 @@ func TestNewFeatureGate(t *testing.T) {
 	fg := NewFeatureGate(client)
 
 	if fg == nil {
-		t.Errorf("Expected FeatureGate to be created, got nil")
+		t.Fatalf("Expected FeatureGate to be created, got nil")
 	}
 	if fg.client != client {
 		t.Errorf("Expected client to be set in FeatureGate")
