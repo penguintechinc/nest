@@ -4,11 +4,16 @@ import json
 import os
 from typing import Any, Optional, Protocol
 
+from models import (
+    DataProtectionPolicyRecord,
+    DataResourceRecord,
+    OperationRecord,
+    SearchPoolRecord,
+    VolumeSnapshotRecord,
+)
 from penguin_dal.db import AsyncDB
 
-from models import (DataProtectionPolicyRecord, DataResourceRecord,
-                    OperationRecord, SearchPoolRecord, VolumeSnapshotRecord)
-from store import Store
+from .store import Store
 
 
 class Row(Protocol):
@@ -88,7 +93,8 @@ class SQLStore(Store):
         await self._ensure_reflected()
         # Check if already exists
         existing = await self.db(
-            (self.db.data_resources.tenant == dr.tenant) & (self.db.data_resources.name == dr.name)
+            (self.db.data_resources.tenant == dr.tenant)
+            & (self.db.data_resources.name == dr.name)
         ).select()
         if existing:
             raise ValueError(f"DataResource {dr.name} already exists")
@@ -118,11 +124,14 @@ class SQLStore(Store):
             health_last_check=dr.health_last_check,
         )
 
-    async def get_data_resource(self, tenant: str, name: str) -> Optional[DataResourceRecord]:
+    async def get_data_resource(
+        self, tenant: str, name: str
+    ) -> Optional[DataResourceRecord]:
         """Get a DataResource by name."""
         await self._ensure_reflected()
         rows = await self.db(
-            (self.db.data_resources.tenant == tenant) & (self.db.data_resources.name == name)
+            (self.db.data_resources.tenant == tenant)
+            & (self.db.data_resources.name == name)
         ).select()
         if not rows:
             raise ValueError(f"DataResource {name} not found")
@@ -132,7 +141,8 @@ class SQLStore(Store):
         """Delete a DataResource."""
         await self._ensure_reflected()
         count = await self.db(
-            (self.db.data_resources.tenant == tenant) & (self.db.data_resources.name == name)
+            (self.db.data_resources.tenant == tenant)
+            & (self.db.data_resources.name == name)
         ).delete()
         if count == 0:
             raise ValueError(f"DataResource {name} not found")
@@ -147,7 +157,8 @@ class SQLStore(Store):
         """Update a DataResource."""
         await self._ensure_reflected()
         count = await self.db(
-            (self.db.data_resources.tenant == dr.tenant) & (self.db.data_resources.name == dr.name)
+            (self.db.data_resources.tenant == dr.tenant)
+            & (self.db.data_resources.name == dr.name)
         ).update(
             id=dr.id,
             resource_type=dr.resource_type,
@@ -173,11 +184,14 @@ class SQLStore(Store):
         if count == 0:
             raise ValueError(f"DataResource {dr.name} not found")
 
-    async def update_data_resource_health(self, tenant: str, name: str, health: str) -> None:
+    async def update_data_resource_health(
+        self, tenant: str, name: str, health: str
+    ) -> None:
         """Update health state of a DataResource."""
         await self._ensure_reflected()
         count = await self.db(
-            (self.db.data_resources.tenant == tenant) & (self.db.data_resources.name == name)
+            (self.db.data_resources.tenant == tenant)
+            & (self.db.data_resources.name == name)
         ).update(health_state=health)
         if count == 0:
             raise ValueError(f"DataResource {name} not found")
@@ -254,7 +268,8 @@ class SQLStore(Store):
         await self._ensure_reflected()
         # Check if already exists
         existing = await self.db(
-            (self.db.volume_snapshots.tenant == tenant) & (self.db.volume_snapshots.name == name)
+            (self.db.volume_snapshots.tenant == tenant)
+            & (self.db.volume_snapshots.name == name)
         ).select()
         if existing:
             raise ValueError(f"VolumeSnapshot {name} already exists")
@@ -282,14 +297,17 @@ class SQLStore(Store):
         """Delete a VolumeSnapshot."""
         await self._ensure_reflected()
         count = await self.db(
-            (self.db.volume_snapshots.tenant == tenant) & (self.db.volume_snapshots.name == name)
+            (self.db.volume_snapshots.tenant == tenant)
+            & (self.db.volume_snapshots.name == name)
         ).delete()
         if count == 0:
             raise ValueError(f"VolumeSnapshot {name} not found")
 
     # DataProtectionPolicy methods
 
-    async def list_protection_policies(self, tenant: str) -> list[DataProtectionPolicyRecord]:
+    async def list_protection_policies(
+        self, tenant: str
+    ) -> list[DataProtectionPolicyRecord]:
         """List all DataProtectionPolicy CRs for a tenant."""
         await self._ensure_reflected()
         rows = await self.db(self.db.data_protection_policies.tenant == tenant).select()
@@ -351,7 +369,9 @@ class SQLStore(Store):
         rows = await self.db(self.db.search_pools.name != "").select()
         return [self._row_to_search_pool(row) for row in rows]
 
-    async def create_search_pool(self, name: str, replicas: int = 1) -> SearchPoolRecord:
+    async def create_search_pool(
+        self, name: str, replicas: int = 1
+    ) -> SearchPoolRecord:
         """Create a new SearchPool CR."""
         await self._ensure_reflected()
         # Check if already exists
