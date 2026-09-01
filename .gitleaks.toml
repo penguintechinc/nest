@@ -1,0 +1,53 @@
+# gitleaks configuration for nest.
+#
+# Policy: this file NEVER broadly disables a rule or allowlists a directory of
+# source code. Every entry below is scoped to specific paths AND specific
+# literal values, with a justification. Test fixtures and example credentials
+# are fixed at the source (obviously-fake values, or generated at runtime) --
+# an allowlist entry is the last resort, used only where the file cannot be
+# edited or the match is not a credential at all.
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Local git worktrees
+# ---------------------------------------------------------------------------
+# .worktrees/ is gitignored (see .gitignore:2) and holds full checkouts of other
+# branches. It is never committed and never present in CI, but a filesystem scan
+# (--no-git) walks it and re-reports every finding from every branch. Path-scoped
+# only; nothing about the content is exempted.
+[[allowlists]]
+description = "Local git worktrees - gitignored working copies, not repo content"
+paths = ['''^\.worktrees/''']
+
+# ---------------------------------------------------------------------------
+# Documentation placeholders and misparsed URLs
+# ---------------------------------------------------------------------------
+# These are matched by VALUE, not by path, and each pattern is anchored to one
+# exact literal. Deliberately not path-scoped: a `paths` entry makes gitleaks
+# skip the whole file, which would exempt any real credential later added to it.
+# Exempting these specific harmless strings everywhere is the narrower choice.
+#
+#   YOUR_TOKEN_HERE / YOUR_JWT_TOKEN_HERE
+#       Fill-me-in placeholders in curl examples.
+#       docs/standards/ARCHITECTURE.md:188, docs/standards/AUTHENTICATION.md:399
+#   ghp_abc123XYZ / sk-live-abc123
+#       Fake tokens in docs/standards/SECURITY.md:81,85 -- both appear in a
+#       "never do this" example demonstrating how NOT to pass credentials.
+#   8080/api/v1/catalog
+#       docs/USAGE.md:1645 wraps a curl command across two lines; the rule sees
+#       the "Bearer $TOKEN" keyword on line 1 and treats the URL path on line 2
+#       as the secret. It is a port and a route, not a credential.
+#
+# docs/standards/*.md are centrally-managed template files that must not be
+# edited in-repo (see CLAUDE.md), so their placeholders cannot be reworded here.
+[[allowlists]]
+description = "Documentation placeholder tokens and a misparsed service URL"
+regexes = [
+  '''^YOUR_TOKEN_HERE$''',
+  '''^YOUR_JWT_TOKEN_HERE$''',
+  '''^ghp_abc123XYZ$''',
+  '''^sk-live-abc123$''',
+  '''^8080/api/v1/catalog$''',
+]

@@ -31,7 +31,7 @@ func TestNewFeatureGate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -71,7 +71,7 @@ func TestHasFeatureCached(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -111,7 +111,7 @@ func TestHasFeatureNotCached(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -151,7 +151,7 @@ func TestHasFeatureError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -192,7 +192,7 @@ func TestRequireFeatureFunc(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -217,7 +217,7 @@ func TestRequireFeatureFunc(t *testing.T) {
 
 // TestLicenseMiddleware tests the LicenseMiddleware
 func TestLicenseMiddleware(t *testing.T) {
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "test")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "test")
 
 	middleware := LicenseMiddleware(client)
 
@@ -264,7 +264,7 @@ func TestRequireFeatureMiddleware(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -303,7 +303,7 @@ func TestRequireFeatureMiddlewareFeatureDisabled(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -343,7 +343,7 @@ func TestGetAllFeatures(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -385,7 +385,7 @@ func TestGetFeatureGate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -455,7 +455,7 @@ func TestGetFeatureGateWrongType(t *testing.T) {
 
 // TestGetLicenseClient tests GetLicenseClient extracts from context
 func TestGetLicenseClient(t *testing.T) {
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "test")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "test")
 
 	engine := gin.New()
 	engine.GET("/test", func(c *gin.Context) {
@@ -542,7 +542,7 @@ func TestCacheRefresh(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -587,7 +587,7 @@ func TestConcurrentFeatureChecks(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -622,7 +622,7 @@ func TestRefreshFeaturesValidationFails(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
@@ -650,7 +650,7 @@ func TestRefreshFeaturesInvalidLicense(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "testproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "testproduct")
 	client.BaseURL = server.URL
 
 	fg := NewFeatureGate(client)
