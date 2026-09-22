@@ -21,17 +21,19 @@ Nest today reconciles ~18 engine `type`s through a single flat `switch` in one G
 
 Six categories + one cross-cutting concern. `spec.type` remains the engine; `spec.category` becomes an explicit enum.
 
-| Category                    | Engines (`spec.type`)                                         |
-| --------------------------- | ------------------------------------------------------------- |
-| **database**                | postgres, mariadb, mysql, keyvalue, timeseries, vector        |
-| **object**                  | object, s3, gcs, azure-blob                                   |
-| **volume**                  | pvc/block, pvc/file, nfs, iscsi, filesystem                   |
-| **streaming**               | kafka                                                         |
-| **search**                  | search (opensearch)                                           |
-| **analytics**               | clickhouse, warehouse/trino, lakehouse/iceberg                |
-| **proxy** _(cross-cutting)_ | not a category — a sidecar/data-path any category may request |
+| Category                    | Engines (`spec.type`)                                                                           |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| **database**                | postgres, mariadb, mysql, keyvalue, timeseries, vector, rockfs                                  |
+| **object**                  | object (s3 / gcs / azure-blob are provider variants of `object`, not distinct spec.type values) |
+| **volume**                  | pvc/block, pvc/file, nfs, iscsi, filesystem                                                     |
+| **streaming**               | kafka                                                                                           |
+| **search**                  | search (opensearch)                                                                             |
+| **analytics**               | clickhouse, warehouse/trino, lakehouse/iceberg                                                  |
+| **proxy** _(cross-cutting)_ | not a category — a sidecar/data-path any category may request                                   |
 
 The **type→category mapping table is the single source of truth**, shared by the webhook, the backfill migration, and every controller's watch filter — one generated module, so they cannot drift.
+
+The authoritative type list is `apis/v1/categories.yaml` (18 engine types); the webhook/backfill/watch filters all derive from it.
 
 ---
 
