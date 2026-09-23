@@ -6,24 +6,25 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import json  # noqa: E402
-import os  # noqa: E402
-from datetime import datetime, timedelta, timezone  # noqa: E402
-from typing import Any, cast  # noqa: E402
-from unittest.mock import MagicMock  # noqa: E402
-from unittest.mock import patch  # noqa: E402
+import json
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Any, cast
+from unittest.mock import (
+    MagicMock,
+    patch,
+)
 
-import jwt  # noqa: E402
-import pytest  # noqa: E402
-from cryptography.hazmat.backends import default_backend  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402
+import jwt
+import pytest
+from app import create_app
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric.rsa import (
     RSAPrivateKey,
     RSAPublicKey,
 )
-
-from app import create_app  # noqa: E402
-from store.store import MemoryStore  # noqa: E402
+from store.store import MemoryStore
 
 # Test RSA keypair (generated once per session)
 _TEST_PRIVATE_KEY = None
@@ -136,7 +137,6 @@ def patch_kubernetes_client():  # type: ignore[no-untyped-def]
 
     def mock_load_incluster_config():  # type: ignore[no-untyped-def]
         """Mock load_incluster_config to do nothing instead of raising."""
-        pass
 
     def mock_custom_objects_api(api_client):  # type: ignore[no-untyped-def]
         """Return a mock CustomObjectsApi."""
@@ -183,9 +183,24 @@ def patch_kubernetes_client():  # type: ignore[no-untyped-def]
             "kubernetes.client.CustomObjectsApi",
             side_effect=mock_custom_objects_api,
         ),
-        patch(
-            "kubernetes.client.CoreV1Api", side_effect=mock_core_v1_api
-        ),
+        patch("kubernetes.client.CoreV1Api", side_effect=mock_core_v1_api),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def allow_category_gate():  # type: ignore[no-untyped-def]
+    """Default the DataResource category gate to ALLOW for all tests.
+
+    The gate (Task 6) defaults fail-safe OFF, which would 403 every existing
+    create-path test that predates gating. test_gating.py's handler-integration
+    tests override this per-test with a nested patch on the same target.
+    """
+    from gating import GateDecision
+
+    with patch(
+        "handlers.dataresource.evaluate_category_gate",
+        return_value=GateDecision(True, "", ""),
     ):
         yield
 

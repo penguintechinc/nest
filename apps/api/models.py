@@ -1,6 +1,7 @@
 """Data models for Nest API."""
-from dataclasses import dataclass, field
-from typing import Any, Optional
+
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -13,9 +14,9 @@ class OperationRecord:
     resource: str  # DataResource name
     phase: str  # "Pending", "Running", "Succeeded", "Failed"
     started_at: str  # ISO8601
-    completed_at: Optional[str] = None
-    error: Optional[str] = None
-    result: Optional[dict[str, Any]] = None
+    completed_at: str | None = None
+    error: str | None = None
+    result: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for JSON serialization."""
@@ -51,6 +52,7 @@ class DataResourceRecord:
     phase: str  # pending | provisioning | ready | failed | deleting
     created_at: str  # ISO8601
     updated_at: str  # ISO8601
+    category: str = ""  # database | object | volume | streaming | search | analytics
     namespace: str = ""
     size_gi: int = 0
     # import fields
@@ -80,6 +82,7 @@ class DataResourceRecord:
             "phase": self.phase,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
+            "category": self.category,
             "namespace": self.namespace,
             "sizeGi": self.size_gi,
             "importConnStr": self.import_conn_str,

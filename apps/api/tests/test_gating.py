@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import pytest
 from gating import evaluate_category_gate
 
 
@@ -42,3 +43,43 @@ def test_posthog_failure_is_failsafe_off():
         d = evaluate_category_gate("database", tier="free", tenant="t1")
     assert not d.allowed
     assert d.code == "nest.gate.flag_disabled"
+
+
+@pytest.mark.asyncio
+async def test_create_denied_when_flag_off(client, bearer_token):
+    with patch("handlers.dataresource.evaluate_category_gate") as gate:
+        from gating import GateDecision
+
+        gate.return_value = GateDecision(False, "nest.gate.flag_disabled", "off")
+        resp = await client.post(
+            "/api/v1/tenants/test-tenant/data-resources",
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json={
+                "name": "x",
+                "type": "postgres",
+                "class": "std",
+                "origination": "managed",
+            },
+        )
+    assert resp.status_code == 403
+    body = await resp.get_json()
+    assert body["code"] == "nest.gate.flag_disabled"
+
+
+@pytest.mark.asyncio
+async def test_create_allowed_when_gate_passes(client, bearer_token):
+    with patch("handlers.dataresource.evaluate_category_gate") as gate:
+        from gating import GateDecision
+
+        gate.return_value = GateDecision(True, "", "")
+        resp = await client.post(
+            "/api/v1/tenants/test-tenant/data-resources",
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json={
+                "name": "x",
+                "type": "postgres",
+                "class": "std",
+                "origination": "managed",
+            },
+        )
+    assert resp.status_code == 202
