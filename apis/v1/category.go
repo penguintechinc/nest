@@ -39,8 +39,19 @@ func init() {
 	}
 	categoryToTypes = make(map[Category][]string, len(raw))
 	TypeToCategory = make(map[string]Category)
+	validCategories := map[Category]bool{
+		CategoryDatabase:  true,
+		CategoryObject:    true,
+		CategoryVolume:    true,
+		CategoryStreaming: true,
+		CategorySearch:    true,
+		CategoryAnalytics: true,
+	}
 	for cat, types := range raw {
 		c := Category(cat)
+		if !validCategories[c] {
+			panic(fmt.Sprintf("apis/v1: categories.yaml key %q is not a valid category (must be one of: database, object, volume, streaming, search, analytics)", cat))
+		}
 		categoryToTypes[c] = types
 		for _, ty := range types {
 			if existing, dup := TypeToCategory[ty]; dup {
