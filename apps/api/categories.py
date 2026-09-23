@@ -24,3 +24,13 @@ CATEGORIES: frozenset[str] = frozenset(_category_to_types.keys())
 def category_for_type(engine_type: str) -> str | None:
     """Return the category owning ``engine_type``, or None if unknown."""
     return _TYPE_TO_CATEGORY.get(engine_type)
+
+
+def all_types() -> frozenset[str]:
+    """Return every engine type across all categories in the SSOT map.
+
+    Callers should derive their accepted-type sets from this rather than
+    hardcoding a list, so the API's validation surface can never drift from
+    the categories.yaml SSOT (see test_categories_sync.py).
+    """
+    return frozenset(_TYPE_TO_CATEGORY.keys())

@@ -7,8 +7,11 @@ A gate failure never raises into the request path.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 # Tier ordering for entitlement comparison.
 _TIER_RANK = {"free": 0, "professional": 1, "pro": 1, "enterprise": 2}
@@ -48,14 +51,29 @@ def _flag_or_cached(flag_key: str, tenant: str) -> bool:
         value = _flag_enabled(flag_key, tenant)
         _flag_cache[(flag_key, tenant)] = value
         return value
-    except Exception:  # noqa: BLE001 - intentionally broad catch for fail-safe
-        return _flag_cache.get((flag_key, tenant), False)
+    except Exception as exc:  # noqa: BLE001 - intentionally broad catch for fail-safe
+        cached = _flag_cache.get((flag_key, tenant), False)
+        logger.warning(
+            "flag backend unreachable for flag=%s tenant=%s; falling back to "
+            "cached value=%s: %s",
+            flag_key,
+            tenant,
+            cached,
+            exc,
+        )
+        return cached
 
 
 def evaluate_category_gate(category: str, tier: str, tenant: str) -> GateDecision:
     """Run the two-layer gate for a category. Never raises."""
     # Layer 1: operational rollout flag.
     if not _flag_or_cached(f"nest.{category}", tenant):
+        logger.info(
+            "category gate denied: category=%s tier=%s code=%s",
+            category,
+            tier,
+            "nest.gate.flag_disabled",
+        )
         return GateDecision(
             False,
             "nest.gate.flag_disabled",
@@ -64,6 +82,13 @@ def evaluate_category_gate(category: str, tier: str, tenant: str) -> GateDecisio
     # Layer 2: license tier entitlement.
     required = _MIN_TIER.get(category)
     if required is not None and _TIER_RANK.get(tier, 0) < _TIER_RANK[required]:
+        logger.info(
+            "category gate denied: category=%s tier=%s code=%s required=%s",
+            category,
+            tier,
+            "nest.gate.tier_required",
+            required,
+        )
         return GateDecision(
             False,
             "nest.gate.tier_required",

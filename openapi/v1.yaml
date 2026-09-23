@@ -824,6 +824,15 @@ components:
       enum: [pvc/block, pvc/file, object, nfs, iscsi, postgres, keyvalue, search]
       description: Storage resource type
 
+    Category:
+      type: string
+      enum: [database, object, volume, streaming, search, analytics]
+      description: >-
+        The DataResource category owning `resourceType`/`type`, derived
+        server-side from the type->category SSOT (categories.yaml) and
+        subject to the two-layer category gate (rollout flag + license
+        tier — see nest.gate.flag_disabled / nest.gate.tier_required).
+
     Origination:
       type: string
       enum: [managed, imported, external]
@@ -924,6 +933,8 @@ components:
           example: acme
         resourceType:
           $ref: "#/components/schemas/ResourceType"
+        category:
+          $ref: "#/components/schemas/Category"
         engineType:
           type: string
           example: postgres
@@ -1025,6 +1036,14 @@ components:
           example: my-postgres
         type:
           $ref: "#/components/schemas/ResourceType"
+        category:
+          allOf:
+            - $ref: "#/components/schemas/Category"
+          description: >-
+            Optional. The server always derives the category from `type`
+            via the categories.yaml SSOT and ignores this field if sent —
+            included here only for forward-compatible clients that wish to
+            assert the expected category alongside `type`.
         class:
           type: string
           description: Kubernetes StorageClass name
