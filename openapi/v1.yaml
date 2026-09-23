@@ -821,8 +821,34 @@ components:
     # -- Enumerations --
     ResourceType:
       type: string
-      enum: [pvc/block, pvc/file, object, nfs, iscsi, postgres, keyvalue, search]
-      description: Storage resource type
+      enum:
+        [
+          postgres,
+          mariadb,
+          mysql,
+          keyvalue,
+          timeseries,
+          vector,
+          rockfs,
+          object,
+          pvc/block,
+          pvc/file,
+          nfs,
+          iscsi,
+          filesystem,
+          kafka,
+          search,
+          clickhouse,
+          warehouse/trino,
+          lakehouse/iceberg,
+        ]
+      description: >-
+        Storage resource type. Exactly the 18 engine strings in the
+        type->category SSOT (apis/v1/categories.yaml), grouped there into
+        the six categories: database (postgres, mariadb, mysql, keyvalue,
+        timeseries, vector, rockfs), object (object), volume (pvc/block,
+        pvc/file, nfs, iscsi, filesystem), streaming (kafka), search
+        (search), analytics (clickhouse, warehouse/trino, lakehouse/iceberg).
 
     Category:
       type: string
