@@ -56,10 +56,13 @@ func handleMigrate(args []string) {
 	switch subcommand {
 	case "longhorn":
 		handleMigrateLonghorn(args)
+	case "categories":
+		handleMigrateCategories(args)
 	case "":
 		fmt.Fprintf(os.Stderr, "Usage: nestctl migrate <subcommand> [flags]\n")
 		fmt.Fprintf(os.Stderr, "Subcommands:\n")
-		fmt.Fprintf(os.Stderr, "  longhorn    Migrate Longhorn volumes to Nest DataResources\n")
+		fmt.Fprintf(os.Stderr, "  longhorn      Migrate Longhorn volumes to Nest DataResources\n")
+		fmt.Fprintf(os.Stderr, "  categories    Backfill spec.category on existing DataResources\n")
 		os.Exit(1)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown migrate subcommand: %s\n", subcommand)
@@ -154,6 +157,24 @@ func handleMigrateLonghorn(args []string) {
 	}
 }
 
+func handleMigrateCategories(args []string) {
+	fs := flag.NewFlagSet("migrate categories", flag.ExitOnError)
+
+	dryRun := fs.Bool("dry-run", false, "Print patches without applying them")
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+
+	if err := migrate.BackfillCategories(ctx, *dryRun); err != nil {
+		fmt.Fprintf(os.Stderr, "Error backfilling categories: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func handleResource(args []string) {
 	fs := flag.NewFlagSet("resource", flag.ExitOnError)
 	endpoint := fs.String("endpoint", "", "Nest API endpoint")
@@ -213,7 +234,8 @@ Usage:
 
 Commands:
   migrate       Migration utilities
-    longhorn    Migrate Longhorn volumes to Nest DataResources
+    longhorn      Migrate Longhorn volumes to Nest DataResources
+    categories    Backfill spec.category on existing DataResources
   resource      Manage DataResources
     list        List resources for a tenant
     get         Get a single resource
@@ -224,6 +246,7 @@ Commands:
 
 Examples:
   nestctl migrate longhorn --tenant mycompany
+  nestctl migrate categories --dry-run
   nestctl resource list --endpoint https://nest.acme.com --token sk-... --tenant acme
   nestctl resource create my-db --type postgres --class standard --endpoint https://nest.acme.com --token sk-... --tenant acme
 
@@ -237,6 +260,9 @@ Flags for 'migrate longhorn':
   --tenant string       Target Nest tenant (required)
   --output string       Output directory for DataResource YAMLs (default: ./nest-migration)
   --dry-run             Print plan without writing files
+
+Flags for 'migrate categories':
+  --dry-run             Print patches without applying them
 
 Flags for 'resource':
   --endpoint string     API endpoint
