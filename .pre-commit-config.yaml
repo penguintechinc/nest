@@ -78,6 +78,9 @@ repos:
     rev: 1.8.0
     hooks:
       - id: bandit
+        # Test files legitimately use asserts (B101) and fixture credentials
+        # (B105/B106); bandit scans application code, not tests.
+        exclude: '(^|/)(tests|tests_workers)/|(^|/)(conftest|test_[^/]+)\.py$'
         stages: [pre-push]
 
   - repo: local
