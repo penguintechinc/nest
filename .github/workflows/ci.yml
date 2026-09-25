@@ -671,8 +671,14 @@ jobs:
         name: test-summary
         path: test-summary.md
 
+    # Best-effort: posting the summary as a PR comment needs pull-requests:write,
+    # which the restricted GITHUB_TOKEN may lack (403 "Resource not accessible by
+    # integration"). The results already surface as individual checks + the
+    # uploaded artifact, and the "Fail if any required job failed" step below is
+    # the real gate — so a failed comment must not fail the build.
     - name: Comment PR with test results
       if: github.event_name == 'pull_request'
+      continue-on-error: true
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
       with:
         script: |
