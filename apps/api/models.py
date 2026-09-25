@@ -1,7 +1,7 @@
 """Data models for Nest API."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 
 @dataclass(slots=True)
@@ -14,9 +14,9 @@ class OperationRecord:
     resource: str  # DataResource name
     phase: str  # "Pending", "Running", "Succeeded", "Failed"
     started_at: str  # ISO8601
-    completed_at: str | None = None
-    error: str | None = None
-    result: dict[str, Any] | None = None
+    completed_at: Optional[str] = None
+    error: Optional[str] = None
+    result: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for JSON serialization."""

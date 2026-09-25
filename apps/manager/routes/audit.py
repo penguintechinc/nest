@@ -1,9 +1,10 @@
 """Audit log routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, jsonify, request
 from utils.auth import require_auth
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,6 @@ async def list_audit_log():
         per_page = 50
 
     def _query():
-
         db = get_db()
         query = db.audit_log.id > 0
         if user_id is not None:
@@ -52,7 +52,12 @@ async def list_audit_log():
         return [r.as_dict() for r in rows], total
 
     entries, total = await asyncio.to_thread(_query)
-    return jsonify({
-        "data": entries,
-        "meta": {"page": page, "per_page": per_page, "total": total},
-    }), 200
+    return (
+        jsonify(
+            {
+                "data": entries,
+                "meta": {"page": page, "per_page": per_page, "total": total},
+            }
+        ),
+        200,
+    )

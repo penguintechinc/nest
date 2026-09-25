@@ -1,9 +1,10 @@
 """Extended route tests for apps/manager — covering all remaining route modules."""
+
 import os
 import sys
-import types
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Ensure the manager app directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -67,12 +68,25 @@ def _make_db() -> MagicMock:
 
     # Insert helpers — each table mock needs subscript (__getitem__) support
     for table in [
-        "managed_database", "database_server", "scaling_policy",
-        "scaling_event", "cloud_provider", "cloud_instance",
-        "user_profile", "user_permission", "sql_file",
-        "security_rule", "license_info", "threat_intel_feed",
-        "threat_intel_indicator", "blocked_database",
-        "temporary_access_token", "audit_log", "resources", "teams", "users",
+        "managed_database",
+        "database_server",
+        "scaling_policy",
+        "scaling_event",
+        "cloud_provider",
+        "cloud_instance",
+        "user_profile",
+        "user_permission",
+        "sql_file",
+        "security_rule",
+        "license_info",
+        "threat_intel_feed",
+        "threat_intel_indicator",
+        "blocked_database",
+        "temporary_access_token",
+        "audit_log",
+        "resources",
+        "teams",
+        "users",
     ]:
         tbl = MagicMock()
         tbl.insert = MagicMock(return_value=42)
@@ -92,6 +106,7 @@ def _make_db() -> MagicMock:
 
 def _make_token(role: str = "admin") -> str:
     from utils.auth import create_token
+
     return create_token(user_id=1, email="test@example.com", role=role)
 
 
@@ -317,11 +332,13 @@ async def test_refresh_database_schema_not_found(client, db):
 async def test_get_license_ok(client, db):
     """Test retrieving license info (happy path, license exists)."""
     db.return_value.select.return_value.first.return_value = MagicMock(
-        as_dict=MagicMock(return_value={
-            "id": 1,
-            "license_key": "test_key_1234567890abcdefghijklmn",
-            "valid": True,
-        })
+        as_dict=MagicMock(
+            return_value={
+                "id": 1,
+                "license_key": "not-a-real-license-key",
+                "valid": True,
+            }
+        )
     )
     resp = await client.get("/api/v1/license", headers=_auth_headers())
     assert resp.status_code == 200
@@ -349,7 +366,7 @@ async def test_set_license_ok(client, db):
         db.return_value.select.return_value.first.return_value = None
         resp = await client.post(
             "/api/v1/license",
-            json={"license_key": "valid-key-12345"},
+            json={"license_key": "not-a-real-license-key"},
             headers=_auth_headers("admin"),
         )
         assert resp.status_code == 200
@@ -448,8 +465,11 @@ async def test_remove_license_forbidden(client, db):
 async def test_sync_servers_ok(client, db):
     """Test syncing servers to Redis (happy path)."""
     from unittest.mock import AsyncMock
-    with patch("routes.sync.sync_to_redis") as mock_sync, \
-         patch("routes.sync.get_db_proxy_client") as mock_db_proxy_getter:
+
+    with (
+        patch("routes.sync.sync_to_redis") as mock_sync,
+        patch("routes.sync.get_db_proxy_client") as mock_db_proxy_getter,
+    ):
         mock_sync.return_value = {"synced": 5}
         mock_client = AsyncMock()
         mock_client.reload = AsyncMock(return_value=True)
@@ -460,16 +480,19 @@ async def test_sync_servers_ok(client, db):
         assert "message" in data
 
 
-
-
 @pytest.mark.asyncio
 async def test_get_blocking_config_ok(client, db):
     """Test retrieving blocking config from DB Proxy (happy path)."""
     from unittest.mock import AsyncMock
+
     with patch("routes.sync.get_db_proxy_client") as mock_db_proxy_getter:
         mock_client = AsyncMock()
         mock_client.get_blocking_config = AsyncMock(
-            return_value={"blocked_resources": ["schema1", "schema2"], "allowed_resources": [], "enable_injection_check": True}
+            return_value={
+                "blocked_resources": ["schema1", "schema2"],
+                "allowed_resources": [],
+                "enable_injection_check": True,
+            }
         )
         mock_db_proxy_getter.return_value = mock_client
         resp = await client.get("/api/v1/blocking-config", headers=_auth_headers())
@@ -482,6 +505,7 @@ async def test_get_blocking_config_ok(client, db):
 async def test_get_blocking_config_error(client, db):
     """Test 500 when retrieving blocking config fails."""
     from unittest.mock import AsyncMock
+
     with patch("routes.sync.get_db_proxy_client") as mock_db_proxy_getter:
         mock_client = AsyncMock()
         mock_client.get_blocking_config.side_effect = Exception("DB Proxy error")
@@ -496,6 +520,7 @@ async def test_get_blocking_config_error(client, db):
 async def test_update_blocking_config_ok(client, db):
     """Test updating blocking config (admin only, happy path)."""
     from unittest.mock import AsyncMock
+
     with patch("routes.sync.get_db_proxy_client") as mock_db_proxy_getter:
         mock_client = AsyncMock()
         mock_client.set_blocking_config = AsyncMock(return_value=True)
@@ -525,6 +550,7 @@ async def test_update_blocking_config_no_body(client, db):
 async def test_update_blocking_config_error(client, db):
     """Test 500 when updating blocking config fails."""
     from unittest.mock import AsyncMock
+
     with patch("routes.sync.get_db_proxy_client") as mock_db_proxy_getter:
         mock_client = AsyncMock()
         mock_client.set_blocking_config.side_effect = Exception("DB Proxy error")
@@ -872,7 +898,9 @@ async def test_advanced_analytics_ok(client, db):
     }
     with patch("routes.analytics.get_db", return_value=db):
         with patch("asyncio.to_thread", new=AsyncMock(return_value=good_data)):
-            resp = await client.get("/api/v1/advanced/analytics", headers=_auth_headers())
+            resp = await client.get(
+                "/api/v1/advanced/analytics", headers=_auth_headers()
+            )
             assert resp.status_code == 200
             data = await resp.get_json()
             assert "data" in data
@@ -895,13 +923,17 @@ async def test_enterprise_reports_ok(client, db):
         },
     }
     with patch("asyncio.to_thread", new=AsyncMock(return_value=good_data)):
-        resp = await client.get("/api/v1/enterprise/reports", headers=_auth_headers("admin"))
+        resp = await client.get(
+            "/api/v1/enterprise/reports", headers=_auth_headers("admin")
+        )
         assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_enterprise_reports_forbidden_viewer(client):
-    resp = await client.get("/api/v1/enterprise/reports", headers=_auth_headers("viewer"))
+    resp = await client.get(
+        "/api/v1/enterprise/reports", headers=_auth_headers("viewer")
+    )
     assert resp.status_code == 403
 
 
@@ -1104,12 +1136,15 @@ async def test_create_security_rule_forbidden_viewer(client):
 @pytest.mark.asyncio
 async def test_sync_servers_ok(client, db):
     from unittest.mock import AsyncMock
+
     # sync_to_redis is a sync function; use MagicMock (not AsyncMock) explicitly
     sync_mock = MagicMock(return_value={"synced": 2, "servers": []})
     mock_db_proxy = AsyncMock()
     mock_db_proxy.reload = AsyncMock(return_value=True)
-    with patch("routes.sync.sync_to_redis", new=sync_mock), \
-         patch("routes.sync.get_db_proxy_client", return_value=mock_db_proxy):
+    with (
+        patch("routes.sync.sync_to_redis", new=sync_mock),
+        patch("routes.sync.get_db_proxy_client", return_value=mock_db_proxy),
+    ):
         resp = await client.post("/api/v1/sync", headers=_auth_headers())
         assert resp.status_code == 200
         data = await resp.get_json()
@@ -1136,11 +1171,14 @@ async def test_sync_redis_failure(client, db):
 @pytest.mark.asyncio
 async def test_sync_db_proxy_failure(client, db):
     from unittest.mock import AsyncMock
+
     sync_mock = MagicMock(return_value={"synced": 1, "servers": []})
     mock_db_proxy = AsyncMock()
     mock_db_proxy.reload = AsyncMock(side_effect=RuntimeError("db proxy unavailable"))
-    with patch("routes.sync.sync_to_redis", new=sync_mock), \
-         patch("routes.sync.get_db_proxy_client", return_value=mock_db_proxy):
+    with (
+        patch("routes.sync.sync_to_redis", new=sync_mock),
+        patch("routes.sync.get_db_proxy_client", return_value=mock_db_proxy),
+    ):
         resp = await client.post("/api/v1/sync", headers=_auth_headers())
         assert resp.status_code == 207
         data = await resp.get_json()
@@ -1167,7 +1205,7 @@ async def test_get_license_ok(client, db):
     row = MagicMock()
     row.as_dict.return_value = {
         "id": 1,
-        "license_key": "ABCD1234EFGH5678",
+        "license_key": "not-a-real-license-key",
         "product": "nest",
         "valid_until": "2027-01-01",
     }
@@ -1334,7 +1372,12 @@ async def test_create_temp_token_ok(client, db):
     db.temporary_access_token.insert.return_value = 15
     # db.temporary_access_token[15].as_dict() must return serializable dict
     item = MagicMock()
-    item.as_dict.return_value = {"id": 15, "user_id": 2, "server_id": 1, "token": "abc123"}
+    item.as_dict.return_value = {
+        "id": 15,
+        "user_id": 2,
+        "server_id": 1,
+        "token": "abc123",
+    }
     db.temporary_access_token.__getitem__ = MagicMock(return_value=item)
     resp = await client.post(
         "/api/v1/temporary-access",
@@ -1488,7 +1531,9 @@ async def test_update_threat_feed_not_found(client, db):
 @pytest.mark.asyncio
 async def test_delete_threat_feed_ok(client, db):
     """Test deleting a threat feed."""
-    resp = await client.delete("/api/v1/threat-intel/feeds/42", headers=_auth_headers("admin"))
+    resp = await client.delete(
+        "/api/v1/threat-intel/feeds/42", headers=_auth_headers("admin")
+    )
     assert resp.status_code == 200
 
 
@@ -1496,7 +1541,9 @@ async def test_delete_threat_feed_ok(client, db):
 async def test_delete_threat_feed_not_found(client, db):
     """Test deleting non-existent feed."""
     db.threat_intel_feed.__getitem__.return_value = None
-    resp = await client.delete("/api/v1/threat-intel/feeds/999", headers=_auth_headers("admin"))
+    resp = await client.delete(
+        "/api/v1/threat-intel/feeds/999", headers=_auth_headers("admin")
+    )
     assert resp.status_code == 404
 
 
@@ -1538,8 +1585,7 @@ async def test_list_threat_indicators_filtered(client, db):
     db.threat_indicator.id.__gt__.return_value = MagicMock()
     db.return_value.select.return_value.__iter__ = MagicMock(return_value=iter([]))
     resp = await client.get(
-        "/api/v1/threat-intel/indicators?type=ip&feed_id=1",
-        headers=_auth_headers()
+        "/api/v1/threat-intel/indicators?type=ip&feed_id=1", headers=_auth_headers()
     )
     assert resp.status_code == 200
 
@@ -1641,7 +1687,9 @@ async def test_update_scaling_policy_not_found(client, db):
 @pytest.mark.asyncio
 async def test_delete_scaling_policy_ok(client, db):
     """Test deleting a scaling policy."""
-    resp = await client.delete("/api/v1/scaling/policies/42", headers=_auth_headers("admin"))
+    resp = await client.delete(
+        "/api/v1/scaling/policies/42", headers=_auth_headers("admin")
+    )
     assert resp.status_code == 200
 
 
@@ -1649,7 +1697,9 @@ async def test_delete_scaling_policy_ok(client, db):
 async def test_delete_scaling_policy_not_found(client, db):
     """Test deleting non-existent policy."""
     db.scaling_policy.__getitem__.return_value = None
-    resp = await client.delete("/api/v1/scaling/policies/999", headers=_auth_headers("admin"))
+    resp = await client.delete(
+        "/api/v1/scaling/policies/999", headers=_auth_headers("admin")
+    )
     assert resp.status_code == 404
 
 
@@ -1670,8 +1720,7 @@ async def test_list_scaling_events_filtered(client, db):
     db.scaling_event.id.__gt__.return_value = MagicMock()
     db.return_value.select.return_value.__iter__ = MagicMock(return_value=iter([]))
     resp = await client.get(
-        "/api/v1/scaling/events?policy_id=1",
-        headers=_auth_headers()
+        "/api/v1/scaling/events?policy_id=1", headers=_auth_headers()
     )
     assert resp.status_code == 200
 
@@ -1688,14 +1737,14 @@ async def test_advanced_analytics_ok(client, db):
     db.resources.id.__gt__.return_value = MagicMock()
     db.resources.status = MagicMock()
     db.resources.id.count.return_value = MagicMock()
-    
+
     # Mock audit logs
     db.audit_logs.timestamp.__ge__.return_value = MagicMock()
-    
+
     # Mock teams/users
     db.teams.deleted_at.__eq__.return_value = MagicMock()
     db.users.is_active.__eq__.return_value = MagicMock()
-    
+
     # Set return values for counts
     db.return_value.select.return_value = []
     db.return_value.count.return_value = 0
@@ -1722,9 +1771,11 @@ async def test_enterprise_reports_ok(client, db):
     db.backup_jobs.status.__eq__.return_value = MagicMock()
     db.backup_jobs.created_at.__ge__.return_value = MagicMock()
     db.provisioning_jobs.created_at.__ge__.return_value = MagicMock()
-    
+
     db.return_value.count.return_value = 0
-    resp = await client.get("/api/v1/enterprise/reports", headers=_auth_headers("admin"))
+    resp = await client.get(
+        "/api/v1/enterprise/reports", headers=_auth_headers("admin")
+    )
     assert resp.status_code == 200
     data = await resp.get_json()
     assert "data" in data or "reports" in data
@@ -1733,5 +1784,7 @@ async def test_enterprise_reports_ok(client, db):
 @pytest.mark.asyncio
 async def test_enterprise_reports_requires_admin(client, db):
     """Test enterprise reports requires admin role."""
-    resp = await client.get("/api/v1/enterprise/reports", headers=_auth_headers("viewer"))
+    resp = await client.get(
+        "/api/v1/enterprise/reports", headers=_auth_headers("viewer")
+    )
     assert resp.status_code == 403

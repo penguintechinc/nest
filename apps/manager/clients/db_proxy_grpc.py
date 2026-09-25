@@ -1,4 +1,5 @@
 """gRPC client for nest DB Proxy ConfigService."""
+
 import json
 import logging
 import os
@@ -34,10 +35,13 @@ class DbProxyGrpcClient:
             try:
                 import grpc
                 from proto import config_pb2_grpc
+
                 self._channel = grpc.aio.insecure_channel(f"{self.host}:{self.port}")
                 self._stub = config_pb2_grpc.ConfigServiceStub(self._channel)
             except Exception as e:
-                logger.warning(f"DB Proxy gRPC connection failed: {e}. Running in degraded mode.")
+                logger.warning(
+                    f"DB Proxy gRPC connection failed: {e}. Running in degraded mode."
+                )
 
     async def reload(self) -> bool:
         """Trigger DB Proxy to reload routes from Redis."""
@@ -47,6 +51,7 @@ class DbProxyGrpcClient:
             return False
         try:
             from proto import config_pb2
+
             response = await self._stub.ReloadConfig(
                 config_pb2.ReloadConfigRequest(api_version="v1")
             )
@@ -63,22 +68,36 @@ class DbProxyGrpcClient:
         await self._ensure_connected()
         if self._stub is None:
             return DbProxyStatus(
-                status="unavailable", active_connections=0, total_connections=0,
-                queries_processed=0, queries_blocked=0, uptime_seconds="0"
+                status="unavailable",
+                active_connections=0,
+                total_connections=0,
+                queries_processed=0,
+                queries_blocked=0,
+                uptime_seconds="0",
             )
         try:
             from proto import config_pb2
-            r = await self._stub.GetStatus(config_pb2.GetStatusRequest(api_version="v1"))
+
+            r = await self._stub.GetStatus(
+                config_pb2.GetStatusRequest(api_version="v1")
+            )
             return DbProxyStatus(
-                status=r.status, active_connections=r.active_connections,
-                total_connections=r.total_connections, queries_processed=r.queries_processed,
-                queries_blocked=r.queries_blocked, uptime_seconds=r.uptime_seconds,
+                status=r.status,
+                active_connections=r.active_connections,
+                total_connections=r.total_connections,
+                queries_processed=r.queries_processed,
+                queries_blocked=r.queries_blocked,
+                uptime_seconds=r.uptime_seconds,
             )
         except Exception as e:
             logger.error(f"DB Proxy GetStatus failed: {e}")
             return DbProxyStatus(
-                status="error", active_connections=0, total_connections=0,
-                queries_processed=0, queries_blocked=0, uptime_seconds="0"
+                status="error",
+                active_connections=0,
+                total_connections=0,
+                queries_processed=0,
+                queries_blocked=0,
+                uptime_seconds="0",
             )
 
     async def health_check(self) -> bool:
@@ -97,19 +116,32 @@ class DbProxyGrpcClient:
         await self._ensure_connected()
         if self._stub is None:
             logger.warning("DB Proxy gRPC unavailable, returning empty config")
-            return {"blocked_resources": [], "allowed_resources": [], "enable_injection_check": False}
+            return {
+                "blocked_resources": [],
+                "allowed_resources": [],
+                "enable_injection_check": False,
+            }
         try:
             from proto import config_pb2
+
             response = await self._stub.GetConfig(
                 config_pb2.GetConfigRequest(api_version="v1", config_key="security")
             )
             if response.status != "success":
                 logger.error(f"DB Proxy GetConfig failed: {response.error_message}")
-                return {"blocked_resources": [], "allowed_resources": [], "enable_injection_check": False}
+                return {
+                    "blocked_resources": [],
+                    "allowed_resources": [],
+                    "enable_injection_check": False,
+                }
             return json.loads(response.config_data.decode("utf-8"))
         except Exception as e:
             logger.error(f"DB Proxy GetConfig failed: {e}")
-            return {"blocked_resources": [], "allowed_resources": [], "enable_injection_check": False}
+            return {
+                "blocked_resources": [],
+                "allowed_resources": [],
+                "enable_injection_check": False,
+            }
 
     async def set_blocking_config(self, config: dict) -> bool:
         """Set security/blocking configuration on DB Proxy."""
@@ -119,6 +151,7 @@ class DbProxyGrpcClient:
             return False
         try:
             from proto import config_pb2
+
             config_data = json.dumps(config).encode("utf-8")
             response = await self._stub.SetConfig(
                 config_pb2.SetConfigRequest(

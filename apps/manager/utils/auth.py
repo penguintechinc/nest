@@ -6,22 +6,20 @@ Implements JWT algorithm policy:
   3. Symmetric (HS256) only if JWT_ALLOW_HS256=true (admin override)
 """
 
-import os
 import functools
-import logging
 import json
+import logging
+import os
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Any
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 import requests
-from quart import request, jsonify, g
-from jose import jwt, JWTError
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import serialization
+from jose import JWTError, jwt
+from quart import g, jsonify, request
 
-from .ec_keys import get_manager_ec_keys, get_ec_public_key_pem
+from .ec_keys import get_manager_ec_keys
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +28,11 @@ log = logging.getLogger(__name__)
 # ============================================================================
 
 JWT_EXPIRY_HOURS = int(os.environ.get("JWT_EXPIRY_HOURS", "24"))
-JWT_ALLOW_HS256 = os.environ.get("JWT_ALLOW_HS256", "false").lower() in ("true", "1", "yes")
+JWT_ALLOW_HS256 = os.environ.get("JWT_ALLOW_HS256", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
 
 # Load ES256 key (manager's own signing key)
@@ -41,9 +43,11 @@ _MANAGER_PRIVATE_KEY, _MANAGER_PUBLIC_KEY = get_manager_ec_keys()
 # JWKS Cache (for RS256 validation)
 # ============================================================================
 
+
 @dataclass(slots=True)
 class JWKSCache:
     """Cached JWKS data with TTL."""
+
     keys: list[dict]
     timestamp: float
 
@@ -102,6 +106,7 @@ def _get_key_from_jwks(kid: str, keys: list[dict]) -> Any:
 # Token Creation (ES256 only)
 # ============================================================================
 
+
 def create_token(user_id: int, email: str, role: str, tenant: str = "default") -> str:
     """Create JWT token signed with ES256 (manager's private key).
 
@@ -122,16 +127,13 @@ def create_token(user_id: int, email: str, role: str, tenant: str = "default") -
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
     }
-    return jwt.encode(
-        payload,
-        _MANAGER_PRIVATE_KEY,
-        algorithm="ES256"
-    )
+    return jwt.encode(payload, _MANAGER_PRIVATE_KEY, algorithm="ES256")
 
 
 # ============================================================================
 # Token Verification (Policy: ES256 → RS256 → HS256 with admin flag)
 # ============================================================================
+
 
 def decode_token(token: str) -> dict:
     """Decode and verify JWT token per algorithm policy.
@@ -239,11 +241,14 @@ def decode_token(token: str) -> dict:
             "Enable with JWT_ALLOW_HS256=true (admin override only)."
         )
 
-    raise JWTError(f"Token verification failed with algorithm {alg}: not accepted by policy")
+    raise JWTError(
+        f"Token verification failed with algorithm {alg}: not accepted by policy"
+    )
 
 
 def require_auth(f):
     """Quart decorator that validates Bearer JWT token."""
+
     @functools.wraps(f)
     async def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
@@ -255,9 +260,10 @@ def require_auth(f):
             g.user_id = int(payload["sub"])
             g.user_email = payload.get("email", "")
             g.user_role = payload.get("role", "viewer")
-        except JWTError as e:
+        except JWTError:
             return jsonify({"error": "Invalid or expired token"}), 401
         return await f(*args, **kwargs)
+
     return decorated
 
 
@@ -273,5 +279,7 @@ def require_role(role: str):
             if role_hierarchy.get(user_role, 0) < role_hierarchy.get(role, 0):
                 return jsonify({"error": "Insufficient permissions"}), 403
             return await f(*args, **kwargs)
+
         return decorated
+
     return decorator

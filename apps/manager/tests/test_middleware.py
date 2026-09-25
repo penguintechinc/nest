@@ -1,4 +1,5 @@
 """Tests for tenant middleware."""
+
 import pytest
 
 

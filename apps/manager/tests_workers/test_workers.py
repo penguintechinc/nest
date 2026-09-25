@@ -1,10 +1,13 @@
 """Unit tests for worker modules with mocks."""
+
+import asyncio
 import os
 import sys
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
 from concurrent.futures import ProcessPoolExecutor
-import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 
 # Use a unique event loop policy per test
 @pytest.fixture(scope="function")
@@ -14,6 +17,7 @@ def event_loop():
     asyncio.set_event_loop(loop)
     yield loop
     loop.close()
+
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -62,7 +66,10 @@ class TestDbHealthChecker:
         """Test PostgreSQL fallback to TCP connectivity."""
         with patch.dict("sys.modules", {"asyncpg": MagicMock()}):
             with patch("asyncio.wait_for", new_callable=AsyncMock) as mock_wait:
-                mock_wait.side_effect = [Exception("conn failed"), (AsyncMock(), MagicMock())]
+                mock_wait.side_effect = [
+                    Exception("conn failed"),
+                    (AsyncMock(), MagicMock()),
+                ]
                 with patch(
                     "asyncio.open_connection", new_callable=AsyncMock
                 ) as mock_tcp:
@@ -89,12 +96,11 @@ class TestDbHealthChecker:
     @pytest.mark.asyncio
     async def test_check_postgresql_timeout(self):
         """Test PostgreSQL timeout handling."""
+
         async def timeout_coro(*args, **kwargs):
             raise asyncio.TimeoutError()
 
-        with patch(
-            "asyncio.open_connection", side_effect=timeout_coro
-        ):
+        with patch("asyncio.open_connection", side_effect=timeout_coro):
             from workers.db_health_checker import check_postgresql
 
             result = await check_postgresql("localhost", 5432, timeout=0.1)
@@ -367,15 +373,11 @@ class TestThreatIntelPoller:
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             mock_session.get = MagicMock(return_value=AsyncMock())
-            mock_session.get.return_value.__aenter__ = AsyncMock(
-                return_value=mock_resp
-            )
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
             mock_session.get.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_session_class.return_value = mock_session
 
-            with patch(
-                "asyncio.get_event_loop"
-            ) as mock_loop:
+            with patch("asyncio.get_event_loop") as mock_loop:
                 mock_event_loop = AsyncMock()
                 mock_event_loop.run_in_executor = AsyncMock(
                     return_value=[mock_indicator]
@@ -401,9 +403,7 @@ class TestThreatIntelPoller:
             mock_session = AsyncMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get = MagicMock(
-                side_effect=Exception("HTTP error: 404")
-            )
+            mock_session.get = MagicMock(side_effect=Exception("HTTP error: 404"))
             mock_session_class.return_value = mock_session
             from workers.threat_intel_poller import poll_feed
 
@@ -428,15 +428,11 @@ class TestThreatIntelPoller:
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             mock_session.get = MagicMock(return_value=AsyncMock())
-            mock_session.get.return_value.__aenter__ = AsyncMock(
-                return_value=mock_resp
-            )
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
             mock_session.get.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_session_class.return_value = mock_session
 
-            with patch(
-                "asyncio.get_event_loop"
-            ) as mock_loop:
+            with patch("asyncio.get_event_loop") as mock_loop:
                 mock_event_loop = AsyncMock()
                 mock_event_loop.run_in_executor = AsyncMock(
                     side_effect=Exception("Parse error")
@@ -480,15 +476,11 @@ class TestThreatIntelPoller:
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             mock_session.get = MagicMock(return_value=AsyncMock())
-            mock_session.get.return_value.__aenter__ = AsyncMock(
-                return_value=mock_resp
-            )
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
             mock_session.get.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_session_class.return_value = mock_session
 
-            with patch(
-                "asyncio.get_event_loop"
-            ) as mock_loop:
+            with patch("asyncio.get_event_loop") as mock_loop:
                 mock_event_loop = AsyncMock()
                 mock_event_loop.run_in_executor = AsyncMock(return_value=[])
                 mock_loop.return_value = mock_event_loop
@@ -519,15 +511,11 @@ class TestThreatIntelPoller:
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             mock_session.get = MagicMock(return_value=AsyncMock())
-            mock_session.get.return_value.__aenter__ = AsyncMock(
-                return_value=mock_resp
-            )
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
             mock_session.get.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_session_class.return_value = mock_session
 
-            with patch(
-                "asyncio.get_event_loop"
-            ) as mock_loop:
+            with patch("asyncio.get_event_loop") as mock_loop:
                 mock_event_loop = AsyncMock()
                 mock_event_loop.run_in_executor = AsyncMock(return_value=[])
                 mock_loop.return_value = mock_event_loop
@@ -554,9 +542,7 @@ class TestThreatIntelPoller:
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             mock_session.get = MagicMock(return_value=AsyncMock())
-            mock_session.get.return_value.__aenter__ = AsyncMock(
-                return_value=mock_resp
-            )
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
             mock_session.get.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_session_class.return_value = mock_session
             from workers.threat_intel_poller import poll_feed
@@ -568,6 +554,7 @@ class TestThreatIntelPoller:
     async def test_threat_intel_poller_loop_iteration(self):
         """Test threat intel poller main loop processes feeds with results."""
         import importlib
+
         sys.modules.pop("workers.threat_intel_poller", None)
 
         mock_db = MagicMock()
@@ -579,8 +566,13 @@ class TestThreatIntelPoller:
         cpu_pool = MagicMock(spec=ProcessPoolExecutor)
 
         with patch("workers.threat_intel_poller.asyncio.sleep", new_callable=AsyncMock):
-            with patch("workers.threat_intel_poller.poll_feed", new_callable=AsyncMock) as mock_poll:
-                with patch("utils.redis_sync.sync_threat_intel_to_redis", new_callable=AsyncMock):
+            with patch(
+                "workers.threat_intel_poller.poll_feed", new_callable=AsyncMock
+            ) as mock_poll:
+                with patch(
+                    "utils.redis_sync.sync_threat_intel_to_redis",
+                    new_callable=AsyncMock,
+                ):
                     mock_poll.return_value = 5
 
                     mod = importlib.import_module("workers.threat_intel_poller")
@@ -596,10 +588,13 @@ class TestThreatIntelPoller:
     async def test_threat_intel_poller_loop_error_handling(self):
         """Test threat intel poller handles errors gracefully."""
         import importlib
+
         sys.modules.pop("workers.threat_intel_poller", None)
 
         mock_db = MagicMock()
-        mock_db.return_value.select.return_value.as_list.side_effect = Exception("DB error")
+        mock_db.return_value.select.return_value.as_list.side_effect = Exception(
+            "DB error"
+        )
 
         cpu_pool = MagicMock(spec=ProcessPoolExecutor)
 
@@ -629,21 +624,20 @@ class TestThreatIntelPoller:
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             mock_session.get = MagicMock(return_value=AsyncMock())
-            mock_session.get.return_value.__aenter__ = AsyncMock(
-                return_value=mock_resp
-            )
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
             mock_session.get.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_session_class.return_value = mock_session
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_event_loop = AsyncMock()
-                mock_event_loop.run_in_executor = AsyncMock(side_effect=Exception("parse error"))
+                mock_event_loop.run_in_executor = AsyncMock(
+                    side_effect=Exception("parse error")
+                )
                 mock_loop.return_value = mock_event_loop
                 from workers.threat_intel_poller import poll_feed
 
                 count = await poll_feed(feed, mock_db, cpu_pool)
                 assert count == 0
-
 
 
 class TestScalingEvaluator:
@@ -653,6 +647,7 @@ class TestScalingEvaluator:
     async def test_evaluate_policy_scale_up_event(self):
         """Test evaluate_policy triggers scale_up when threshold exceeded."""
         import importlib
+
         sys.modules.pop("workers.scaling_evaluator", None)
 
         policy = {
@@ -682,6 +677,7 @@ class TestScalingEvaluator:
     async def test_evaluate_policy_scale_down_event(self):
         """Test evaluate_policy triggers scale_down when threshold undercut."""
         import importlib
+
         sys.modules.pop("workers.scaling_evaluator", None)
 
         policy = {
@@ -710,6 +706,7 @@ class TestScalingEvaluator:
     async def test_evaluate_policy_no_event_in_range(self):
         """Test evaluate_policy doesn't trigger when value is in range."""
         import importlib
+
         sys.modules.pop("workers.scaling_evaluator", None)
 
         policy = {
@@ -736,6 +733,7 @@ class TestScalingEvaluator:
     async def test_evaluate_policy_redis_error(self):
         """Test evaluate_policy handles Redis errors gracefully."""
         import importlib
+
         sys.modules.pop("workers.scaling_evaluator", None)
 
         policy = {
@@ -762,16 +760,25 @@ class TestScalingEvaluator:
     async def test_scaling_evaluator_loop_iteration(self):
         """Test scaling evaluator main loop processes policies."""
         import importlib
+
         sys.modules.pop("workers.scaling_evaluator", None)
 
         mock_db = MagicMock()
         policies = [
-            {"id": 1, "server_id": 1, "trigger_metric": "connections", "scale_up_threshold": 100, "scale_down_threshold": 10},
+            {
+                "id": 1,
+                "server_id": 1,
+                "trigger_metric": "connections",
+                "scale_up_threshold": 100,
+                "scale_down_threshold": 10,
+            },
         ]
         mock_db.return_value.select.return_value.as_list.return_value = policies
 
         with patch("workers.scaling_evaluator.asyncio.sleep", new_callable=AsyncMock):
-            with patch("workers.scaling_evaluator.evaluate_policy", new_callable=AsyncMock) as mock_eval:
+            with patch(
+                "workers.scaling_evaluator.evaluate_policy", new_callable=AsyncMock
+            ) as mock_eval:
                 mod = importlib.import_module("workers.scaling_evaluator")
                 coro = mod.scaling_evaluator_loop(mock_db)
                 try:
@@ -784,10 +791,13 @@ class TestScalingEvaluator:
     async def test_scaling_evaluator_loop_error_handling(self):
         """Test scaling evaluator handles errors gracefully."""
         import importlib
+
         sys.modules.pop("workers.scaling_evaluator", None)
 
         mock_db = MagicMock()
-        mock_db.return_value.select.return_value.as_list.side_effect = Exception("DB error")
+        mock_db.return_value.select.return_value.as_list.side_effect = Exception(
+            "DB error"
+        )
 
         with patch("workers.scaling_evaluator.asyncio.sleep", new_callable=AsyncMock):
             mod = importlib.import_module("workers.scaling_evaluator")
@@ -805,6 +815,7 @@ class TestDbHealthCheckerLoop:
     async def test_db_health_checker_loop_processes_servers(self):
         """Test health checker loop processes server list."""
         import importlib
+
         sys.modules.pop("workers.db_health_checker", None)
 
         mock_db = MagicMock()
@@ -815,8 +826,12 @@ class TestDbHealthCheckerLoop:
         mock_db.return_value.select.return_value.as_list.return_value = servers
 
         with patch("workers.db_health_checker.asyncio.sleep", new_callable=AsyncMock):
-            with patch("workers.db_health_checker.check_server_health", new_callable=AsyncMock) as mock_check:
-                with patch("workers.db_health_checker.asyncio.gather", new_callable=AsyncMock) as mock_gather:
+            with patch(
+                "workers.db_health_checker.check_server_health", new_callable=AsyncMock
+            ) as mock_check:
+                with patch(
+                    "workers.db_health_checker.asyncio.gather", new_callable=AsyncMock
+                ) as mock_gather:
                     mock_gather.return_value = [True, True]
 
                     mod = importlib.import_module("workers.db_health_checker")
@@ -832,6 +847,7 @@ class TestDbHealthCheckerLoop:
     async def test_db_health_checker_loop_exception_handling(self):
         """Test health checker handles exception in gather."""
         import importlib
+
         sys.modules.pop("workers.db_health_checker", None)
 
         mock_db = MagicMock()
@@ -841,7 +857,9 @@ class TestDbHealthCheckerLoop:
         mock_db.return_value.select.return_value.as_list.return_value = servers
 
         with patch("workers.db_health_checker.asyncio.sleep", new_callable=AsyncMock):
-            with patch("workers.db_health_checker.asyncio.gather", new_callable=AsyncMock) as mock_gather:
+            with patch(
+                "workers.db_health_checker.asyncio.gather", new_callable=AsyncMock
+            ) as mock_gather:
                 mock_gather.return_value = [Exception("check failed")]
 
                 mod = importlib.import_module("workers.db_health_checker")
@@ -855,6 +873,7 @@ class TestDbHealthCheckerLoop:
     async def test_check_server_health_unsupported_type(self):
         """Test check_server_health falls back to MySQL for unsupported types."""
         import importlib
+
         sys.modules.pop("workers.db_health_checker", None)
 
         server = {"id": 1, "db_type": "mongodb", "host": "mongo1.local", "port": 27017}

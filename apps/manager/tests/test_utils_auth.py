@@ -1,9 +1,9 @@
 """Tests for utils/auth.py — create_token, decode_token, require_auth, require_role."""
+
 import os
 import sys
+
 import pytest
-import pytest_asyncio
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -15,8 +15,10 @@ os.environ.setdefault("JWT_EXPIRY_HOURS", "1")
 # create_token / decode_token
 # ---------------------------------------------------------------------------
 
+
 def test_create_token_returns_string():
     from utils.auth import create_token
+
     token = create_token(user_id=1, email="a@b.com", role="admin")
     assert isinstance(token, str)
     assert len(token) > 10
@@ -24,6 +26,7 @@ def test_create_token_returns_string():
 
 def test_create_token_decode_roundtrip():
     from utils.auth import create_token, decode_token
+
     token = create_token(user_id=42, email="user@example.com", role="maintainer")
     payload = decode_token(token)
     assert payload["sub"] == "42"
@@ -34,6 +37,7 @@ def test_create_token_decode_roundtrip():
 def test_decode_invalid_token_raises():
     from jose import JWTError
     from utils.auth import decode_token
+
     with pytest.raises(JWTError):
         decode_token("not.a.valid.jwt.at.all")
 
@@ -41,6 +45,7 @@ def test_decode_invalid_token_raises():
 def test_decode_tampered_token_raises():
     from jose import JWTError
     from utils.auth import create_token, decode_token
+
     token = create_token(1, "x@x.com", "admin")
     # Tamper with signature
     parts = token.split(".")
@@ -52,6 +57,7 @@ def test_decode_tampered_token_raises():
 def test_create_token_different_roles():
     """Token encodes role correctly for all valid roles."""
     from utils.auth import create_token, decode_token
+
     for role in ("admin", "maintainer", "viewer"):
         token = create_token(1, "a@b.com", role)
         payload = decode_token(token)
@@ -62,10 +68,11 @@ def test_create_token_different_roles():
 # require_auth decorator (via a minimal Quart app)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def auth_app():
     """Minimal Quart app with a single protected route for decorator testing."""
-    from quart import Quart, jsonify, g
+    from quart import Quart, g, jsonify
     from utils.auth import require_auth, require_role
 
     mini = Quart(__name__)
@@ -92,6 +99,7 @@ def auth_app():
 @pytest.mark.asyncio
 async def test_require_auth_valid_token(auth_app):
     from utils.auth import create_token
+
     token = create_token(7, "u@u.com", "admin")
     client = auth_app.test_client()
     resp = await client.get("/protected", headers={"Authorization": f"Bearer {token}"})
@@ -120,11 +128,11 @@ async def test_require_auth_wrong_scheme(auth_app):
 @pytest.mark.asyncio
 async def test_require_auth_expired_token(auth_app):
     """Token with past expiry is rejected."""
-    import time
     from datetime import datetime, timedelta, timezone
-    from jose import jwt
-    from cryptography.hazmat.primitives.asymmetric import ec
+
     from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from jose import jwt
 
     # Generate a test EC key for this test
     test_private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
@@ -139,13 +147,16 @@ async def test_require_auth_expired_token(auth_app):
     }
     expired = jwt.encode(payload, test_private_key, algorithm="ES256")
     client = auth_app.test_client()
-    resp = await client.get("/protected", headers={"Authorization": f"Bearer {expired}"})
+    resp = await client.get(
+        "/protected", headers={"Authorization": f"Bearer {expired}"}
+    )
     assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_require_role_admin_allowed(auth_app):
     from utils.auth import create_token
+
     token = create_token(1, "a@a.com", "admin")
     client = auth_app.test_client()
     resp = await client.get("/admin-only", headers={"Authorization": f"Bearer {token}"})
@@ -155,6 +166,7 @@ async def test_require_role_admin_allowed(auth_app):
 @pytest.mark.asyncio
 async def test_require_role_viewer_blocked(auth_app):
     from utils.auth import create_token
+
     token = create_token(1, "a@a.com", "viewer")
     client = auth_app.test_client()
     resp = await client.get("/admin-only", headers={"Authorization": f"Bearer {token}"})
@@ -166,6 +178,7 @@ async def test_require_role_viewer_blocked(auth_app):
 @pytest.mark.asyncio
 async def test_require_role_maintainer_blocked_from_admin(auth_app):
     from utils.auth import create_token
+
     token = create_token(1, "a@a.com", "maintainer")
     client = auth_app.test_client()
     resp = await client.get("/admin-only", headers={"Authorization": f"Bearer {token}"})
@@ -175,9 +188,12 @@ async def test_require_role_maintainer_blocked_from_admin(auth_app):
 @pytest.mark.asyncio
 async def test_require_role_maintainer_allowed_for_maintainer_route(auth_app):
     from utils.auth import create_token
+
     token = create_token(1, "a@a.com", "maintainer")
     client = auth_app.test_client()
-    resp = await client.get("/maintainer-only", headers={"Authorization": f"Bearer {token}"})
+    resp = await client.get(
+        "/maintainer-only", headers={"Authorization": f"Bearer {token}"}
+    )
     assert resp.status_code == 200
 
 
@@ -185,9 +201,12 @@ async def test_require_role_maintainer_allowed_for_maintainer_route(auth_app):
 async def test_require_role_admin_allowed_for_maintainer_route(auth_app):
     """Admin satisfies maintainer requirement (higher role hierarchy)."""
     from utils.auth import create_token
+
     token = create_token(1, "a@a.com", "admin")
     client = auth_app.test_client()
-    resp = await client.get("/maintainer-only", headers={"Authorization": f"Bearer {token}"})
+    resp = await client.get(
+        "/maintainer-only", headers={"Authorization": f"Bearer {token}"}
+    )
     assert resp.status_code == 200
 
 
@@ -202,9 +221,11 @@ async def test_require_role_no_token(auth_app):
 # Role hierarchy edge cases
 # ---------------------------------------------------------------------------
 
+
 def test_role_hierarchy_values():
     """Confirm role_hierarchy constants are correct relative to each other."""
     from utils.auth import require_role
+
     # We just verify the function is callable and returns a decorator
     decorator = require_role("admin")
     assert callable(decorator)

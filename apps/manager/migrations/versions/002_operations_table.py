@@ -4,6 +4,7 @@ Revision ID: 002_operations
 Revises: 001_initial
 Create Date: 2026-07-08
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -26,8 +27,12 @@ def upgrade() -> None:
         sa.Column("message", sa.Text(), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("progress", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
         sa.PrimaryKeyConstraint("tenant", "id", name="pk_operations_tenant_id"),
         sa.Index("ix_operations_tenant", "tenant"),
     )

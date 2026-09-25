@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -51,7 +50,7 @@ func NewMux(auditLogger *AuditLogger, enterpriseLicense string, logger *zap.Logg
 		// Extract claims from verified token (SECURITY: never trust body-supplied actor/tenant)
 		claims := auth.ClaimsFromContext(r.Context())
 		if claims == nil {
-			http.Error(w, fmt.Sprintf(`{"error": "no claims in context"}`), http.StatusInternalServerError)
+			http.Error(w, `{"error": "no claims in context"}`, http.StatusInternalServerError)
 			return
 		}
 
@@ -80,7 +79,7 @@ func NewMux(auditLogger *AuditLogger, enterpriseLicense string, logger *zap.Logg
 		// Extract claims from verified token
 		claims := auth.ClaimsFromContext(r.Context())
 		if claims == nil {
-			http.Error(w, fmt.Sprintf(`{"error": "no claims in context"}`), http.StatusInternalServerError)
+			http.Error(w, `{"error": "no claims in context"}`, http.StatusInternalServerError)
 			return
 		}
 
@@ -140,7 +139,7 @@ func NewMux(auditLogger *AuditLogger, enterpriseLicense string, logger *zap.Logg
 		// Extract claims from verified token
 		claims := auth.ClaimsFromContext(r.Context())
 		if claims == nil {
-			http.Error(w, fmt.Sprintf(`{"error": "no claims in context"}`), http.StatusInternalServerError)
+			http.Error(w, `{"error": "no claims in context"}`, http.StatusInternalServerError)
 			return
 		}
 

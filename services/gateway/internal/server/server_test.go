@@ -18,7 +18,7 @@ func TestNewGatewayServer(t *testing.T) {
 	server := New(cfg, logger)
 
 	if server == nil {
-		t.Error("New() returned nil")
+		t.Fatal("New() returned nil")
 	}
 
 	if server.cfg != cfg {

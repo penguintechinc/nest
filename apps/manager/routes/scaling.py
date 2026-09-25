@@ -1,9 +1,10 @@
 """Scaling policy and event management routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -15,15 +16,15 @@ scaling_bp = Blueprint("scaling_bp", __name__, url_prefix="/api/v1")
 # Scaling Policies
 # ---------------------------------------------------------------------------
 
+
 @scaling_bp.route("/scaling/policies", methods=["GET"])
 @require_auth
 async def list_policies():
     """List all scaling policies."""
+
     def _query():
         db = get_db()
-        rows = db(db.scaling_policy.id > 0).select(
-            orderby=db.scaling_policy.name
-        )
+        rows = db(db.scaling_policy.id > 0).select(orderby=db.scaling_policy.name)
         return [r.as_dict() for r in rows]
 
     policies = await asyncio.to_thread(_query)
@@ -44,7 +45,6 @@ async def create_policy():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         pol_id = db.scaling_policy.insert(
             name=body["name"],
@@ -68,6 +68,7 @@ async def create_policy():
 @require_auth
 async def get_policy(pol_id: int):
     """Get a single scaling policy."""
+
     def _query():
         db = get_db()
         row = db.scaling_policy[pol_id]
@@ -88,14 +89,18 @@ async def update_policy(pol_id: int):
         return jsonify({"error": "Request body required"}), 400
 
     def _update():
-
         db = get_db()
         row = db.scaling_policy[pol_id]
         if not row:
             return None
         updatable = [
-            "name", "metric", "threshold", "scale_up_by",
-            "scale_down_by", "cooldown_seconds", "enabled",
+            "name",
+            "metric",
+            "threshold",
+            "scale_up_by",
+            "scale_down_by",
+            "cooldown_seconds",
+            "enabled",
         ]
         updates = {k: body[k] for k in updatable if k in body}
         if updates:
@@ -113,6 +118,7 @@ async def update_policy(pol_id: int):
 @require_role("admin")
 async def delete_policy(pol_id: int):
     """Delete a scaling policy."""
+
     def _delete():
         db = get_db()
         row = db.scaling_policy[pol_id]
@@ -132,6 +138,7 @@ async def delete_policy(pol_id: int):
 # Scaling Events
 # ---------------------------------------------------------------------------
 
+
 @scaling_bp.route("/scaling/events", methods=["GET"])
 @require_auth
 async def list_events():
@@ -140,7 +147,6 @@ async def list_events():
     status = request.args.get("status")
 
     def _query():
-
         db = get_db()
         query = db.scaling_event.id > 0
         if server_id is not None:

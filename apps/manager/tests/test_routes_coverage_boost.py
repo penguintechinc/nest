@@ -1,12 +1,11 @@
 """Coverage boost tests for cloud, permissions, security_rules, sql_files, blocked_databases, temporary_access routes."""
+
 import os
 import sys
-import types
-import socket
+from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
+
 import pytest
-import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone, timedelta
 
 # Ensure the manager app directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -74,6 +73,7 @@ def _make_db() -> MagicMock:
 def _create_token(role="admin"):
     """Create a valid JWT token for testing."""
     from utils.auth import create_token
+
     return create_token(user_id=1, email="test@example.com", role=role)
 
 
@@ -321,7 +321,9 @@ class TestPermissions:
         """Create permission returns 201."""
         token = _create_token("admin")
         perm_row = MagicMock()
-        perm_row.as_dict = MagicMock(return_value={"id": 1, "user_id": 1, "server_id": 1})
+        perm_row.as_dict = MagicMock(
+            return_value={"id": 1, "user_id": 1, "server_id": 1}
+        )
         mock_db.user_permission.__getitem__.return_value = perm_row
 
         response = await app_client.post(
@@ -858,7 +860,11 @@ class TestTemporaryAccess:
         token = _create_token("admin")
         token_row = MagicMock()
         token_row.as_dict = MagicMock(
-            return_value={"id": 1, "token": "abc123", "used_at": datetime.now(timezone.utc)}
+            return_value={
+                "id": 1,
+                "token": "abc123",
+                "used_at": datetime.now(timezone.utc),
+            }
         )
         mock_db.temporary_access_token.__getitem__.return_value = token_row
 
@@ -1229,7 +1235,9 @@ class TestAppCoverage:
     async def test_404_not_found(self, app_client):
         """Unknown route returns 404 when authenticated."""
         # 404s go through auth middleware first, so need to provide auth
-        response = await app_client.get("/api/v1/nonexistent", headers=app_client.get_auth_headers())
+        response = await app_client.get(
+            "/api/v1/nonexistent", headers=app_client.get_auth_headers()
+        )
         assert response.status_code == 404
         data = await response.get_json()
         assert "error" in data
@@ -1270,9 +1278,9 @@ class TestDatabaseServersGaps:
         """Test database server connectivity endpoint success path."""
         db = _make_db()
         mock_row = MagicMock()
-        mock_row.as_dict = MagicMock(return_value={
-            "id": 1, "host": "localhost", "port": 5432, "name": "test"
-        })
+        mock_row.as_dict = MagicMock(
+            return_value={"id": 1, "host": "localhost", "port": 5432, "name": "test"}
+        )
         db.database_server.__getitem__ = MagicMock(return_value=mock_row)
 
         with patch("routes.database_servers.get_db", return_value=db):
@@ -1290,13 +1298,15 @@ class TestDatabaseServersGaps:
         """Test database server connectivity error path."""
         db = _make_db()
         mock_row = MagicMock()
-        mock_row.as_dict = MagicMock(return_value={
-            "id": 1, "host": "unreachable", "port": 5432, "name": "test"
-        })
+        mock_row.as_dict = MagicMock(
+            return_value={"id": 1, "host": "unreachable", "port": 5432, "name": "test"}
+        )
         db.database_server.__getitem__ = MagicMock(return_value=mock_row)
 
         with patch("routes.database_servers.get_db", return_value=db):
-            with patch("socket.create_connection", side_effect=OSError("Connection failed")):
+            with patch(
+                "socket.create_connection", side_effect=OSError("Connection failed")
+            ):
                 response = await app_client.post(
                     "/api/v1/servers/1/test",
                     headers={"Authorization": f"Bearer {_create_token()}"},
@@ -1320,7 +1330,7 @@ class TestLicenseGaps:
             with patch("routes.license._validate_with_server") as mock_validate:
                 mock_validate.return_value = {
                     "valid": False,
-                    "error": "License expired"
+                    "error": "License expired",
                 }
                 response = await app_client.post(
                     "/api/v1/license",

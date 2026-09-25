@@ -6,25 +6,25 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import json
-import os
-from datetime import datetime, timedelta, timezone
-from typing import Any, cast
+import json  # noqa: E402
+import os  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from typing import Any, cast  # noqa: E402
 from unittest.mock import (
-    MagicMock,
-    patch,
+    MagicMock,  # noqa: E402
+    patch,  # noqa: E402
 )
 
-import jwt
-import pytest
-from app import create_app
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.rsa import (
+import jwt  # noqa: E402
+import pytest  # noqa: E402
+from app import create_app  # noqa: E402
+from cryptography.hazmat.backends import default_backend  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402
     RSAPrivateKey,
     RSAPublicKey,
 )
-from store.store import MemoryStore
+from store.store import MemoryStore  # noqa: E402
 
 # Test RSA keypair (generated once per session)
 _TEST_PRIVATE_KEY = None

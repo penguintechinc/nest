@@ -17,9 +17,8 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from quart import Blueprint, jsonify
-
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, jsonify
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -30,6 +29,7 @@ analytics_bp = Blueprint("analytics", __name__, url_prefix="/api/v1")
 # ---------------------------------------------------------------------------
 # GET /api/v1/advanced/analytics
 # ---------------------------------------------------------------------------
+
 
 @analytics_bp.route("/advanced/analytics", methods=["GET"])
 @require_auth
@@ -42,7 +42,6 @@ async def advanced_analytics() -> tuple:
     """
 
     def _do_query() -> dict:
-
         db = get_db()
         # Resource counts by status
         resource_rows = db(db.resources.id > 0).select(
@@ -55,7 +54,8 @@ async def advanced_analytics() -> tuple:
 
         # Active resources (status == 'running' or 'active')
         active_resources = sum(
-            v for k, v in resources_by_status.items()
+            v
+            for k, v in resources_by_status.items()
             if k in ("running", "active", "ready")
         )
 
@@ -64,9 +64,7 @@ async def advanced_analytics() -> tuple:
         audit_count = db(db.audit_logs.timestamp >= since).count()
 
         # Team count
-        team_count = db(
-            (db.teams.deleted_at == None)  # noqa: E711
-        ).count()
+        team_count = db((db.teams.deleted_at == None)).count()  # noqa: E711
 
         # User count (active)
         user_count = db(db.users.is_active == True).count()  # noqa: E712
@@ -99,6 +97,7 @@ async def advanced_analytics() -> tuple:
 # GET /api/v1/enterprise/reports
 # ---------------------------------------------------------------------------
 
+
 @analytics_bp.route("/enterprise/reports", methods=["GET"])
 @require_role("admin")
 async def enterprise_reports() -> tuple:
@@ -109,7 +108,6 @@ async def enterprise_reports() -> tuple:
     """
 
     def _do_query() -> dict:
-
         db = get_db()
         # Security audit: blocked databases + security rules
         blocked_count = db(db.blocked_databases.id > 0).count()
@@ -134,9 +132,7 @@ async def enterprise_reports() -> tuple:
         ).count()
 
         # Provisioning jobs — last 30 days
-        total_provisioning = db(
-            db.provisioning_jobs.created_at >= since_30
-        ).count()
+        total_provisioning = db(db.provisioning_jobs.created_at >= since_30).count()
 
         return {
             "message": "Enterprise reports",

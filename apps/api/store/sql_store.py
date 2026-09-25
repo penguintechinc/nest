@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Any, Protocol
+from typing import Any, Optional, Protocol
 
 from models import (
     DataProtectionPolicyRecord,
@@ -12,7 +12,8 @@ from models import (
     VolumeSnapshotRecord,
 )
 from penguin_dal.db import AsyncDB
-from store import Store
+
+from .store import Store
 
 
 class Row(Protocol):
@@ -126,7 +127,7 @@ class SQLStore(Store):
 
     async def get_data_resource(
         self, tenant: str, name: str
-    ) -> DataResourceRecord | None:
+    ) -> Optional[DataResourceRecord]:
         """Get a DataResource by name."""
         await self._ensure_reflected()
         rows = await self.db(

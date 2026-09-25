@@ -9,13 +9,7 @@ Runtime queries use penguin-dal AsyncDB.
 
 from datetime import datetime
 
-from sqlalchemy import (
-    Column,
-    String,
-    Integer,
-    Text,
-    DateTime,
-)
+from sqlalchemy import Column, DateTime, Integer, String, Text
 
 from . import Base
 
@@ -35,4 +29,6 @@ class Operation(Base):
     error = Column(Text, nullable=True)
     progress = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

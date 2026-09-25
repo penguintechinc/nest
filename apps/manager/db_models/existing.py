@@ -12,15 +12,7 @@ Tables covered:
 
 from datetime import datetime
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-)
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 
 try:
     from sqlalchemy import JSON

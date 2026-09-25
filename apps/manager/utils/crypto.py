@@ -1,7 +1,9 @@
 """Cryptographic utilities for field encryption and API key generation."""
+
 import os
 import secrets
 import string
+
 from cryptography.fernet import Fernet
 
 

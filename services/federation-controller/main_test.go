@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +16,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// newTestSigningKey returns a freshly generated, base64-encoded 32-byte key for
+// use as FEDERATION_JWT_SIGNING_KEY in tests. It is generated at runtime rather
+// than committed as a literal so no credential-shaped constant lives in source.
+func newTestSigningKey() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic("federation test: unable to generate signing key: " + err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
 func init() {
 	// Set JWT env vars for tests
 	os.Setenv("JWT_ALGORITHM", "HS256")
@@ -21,9 +34,8 @@ func init() {
 	os.Setenv("JWT_ISSUER", "test-issuer")
 	os.Setenv("JWT_AUDIENCE", "test-audience")
 
-	// Set required federation signing key for all tests (base64-encoded test key)
-	// Decoded value: "test-key-32-bytes-minimum-length"
-	os.Setenv("FEDERATION_JWT_SIGNING_KEY", "dGVzdC1rZXktMzItYnl0ZXMtbWluaW11bS1sZW5ndGg=")
+	// Set required federation signing key for all tests
+	os.Setenv("FEDERATION_JWT_SIGNING_KEY", newTestSigningKey())
 }
 
 func TestRunHealthEndpoint(t *testing.T) {
@@ -906,7 +918,7 @@ func TestValidateSigningKey_ValidKey(t *testing.T) {
 	defer os.Setenv("FEDERATION_JWT_SIGNING_KEY", originalKeyEnv)
 
 	// Set a valid base64 key
-	os.Setenv("FEDERATION_JWT_SIGNING_KEY", "dGVzdC1rZXktMzItYnl0ZXMtbWluaW11bS1sZW5ndGg=")
+	os.Setenv("FEDERATION_JWT_SIGNING_KEY", newTestSigningKey())
 
 	key, err := validateSigningKey()
 	if err != nil {

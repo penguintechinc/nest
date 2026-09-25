@@ -1,4 +1,5 @@
 """Structured JSON logging configuration for Nest API."""
+
 import logging
 import os
 
