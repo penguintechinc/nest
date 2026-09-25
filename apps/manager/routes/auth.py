@@ -18,11 +18,10 @@ import hashlib
 import logging
 from typing import Any
 
-from quart import Blueprint, g, jsonify, request
-from werkzeug.security import check_password_hash, generate_password_hash
-
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import create_token, require_auth, require_role
+from werkzeug.security import check_password_hash, generate_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +31,7 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _verify_password(stored_hash: str, plaintext: str) -> bool:
     """Check password against stored hash.
@@ -62,19 +62,20 @@ def _user_to_dict(user: Any) -> dict:
 
 
 def _lookup_user(identifier: str) -> Any | None:
-
-
     db = get_db()
     """Return a user row by username or email, or None if not found."""
-    row = db(
-        (db.users.username == identifier) | (db.users.email == identifier)
-    ).select(limitby=(0, 1)).first()
+    row = (
+        db((db.users.username == identifier) | (db.users.email == identifier))
+        .select(limitby=(0, 1))
+        .first()
+    )
     return row
 
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/auth/login
 # ---------------------------------------------------------------------------
+
 
 @auth_bp.route("/auth/login", methods=["POST"])
 async def login() -> tuple:
@@ -116,15 +117,21 @@ async def login() -> tuple:
 
     logger.info("User logged in: id=%d username=%s", int(user.id), user.username)
 
-    return jsonify({
-        "token": token,
-        "user": _user_to_dict(user),
-    }), 200
+    return (
+        jsonify(
+            {
+                "token": token,
+                "user": _user_to_dict(user),
+            }
+        ),
+        200,
+    )
 
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/auth/logout
 # ---------------------------------------------------------------------------
+
 
 @auth_bp.route("/auth/logout", methods=["POST"])
 @require_auth
@@ -138,6 +145,7 @@ async def logout() -> tuple:
 # GET /api/v1/auth/me
 # ---------------------------------------------------------------------------
 
+
 @auth_bp.route("/auth/me", methods=["GET"])
 @require_auth
 async def me() -> tuple:
@@ -145,7 +153,6 @@ async def me() -> tuple:
     user_id: int = g.user_id
 
     def _do_lookup() -> Any | None:
-
         db = get_db()
         return db(db.users.id == user_id).select(limitby=(0, 1)).first()
 
@@ -160,6 +167,7 @@ async def me() -> tuple:
 # ---------------------------------------------------------------------------
 # POST /api/v1/auth/register
 # ---------------------------------------------------------------------------
+
 
 @auth_bp.route("/auth/register", methods=["POST"])
 @require_role("admin")
@@ -191,12 +199,13 @@ async def register() -> tuple:
     password_hash = generate_password_hash(password)
 
     def _do_create() -> dict:
-
         db = get_db()
         # Check uniqueness.
-        existing = db(
-            (db.users.username == username) | (db.users.email == email)
-        ).select(limitby=(0, 1)).first()
+        existing = (
+            db((db.users.username == username) | (db.users.email == email))
+            .select(limitby=(0, 1))
+            .first()
+        )
         if existing is not None:
             return {"conflict": True}
 
@@ -220,6 +229,8 @@ async def register() -> tuple:
     user = result["user"]
     logger.info(
         "New user created: id=%d username=%s by admin id=%d",
-        int(user.id), user.username, g.user_id,
+        int(user.id),
+        user.username,
+        g.user_id,
     )
     return jsonify(_user_to_dict(user)), 201

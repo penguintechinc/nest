@@ -1,10 +1,9 @@
 """Tests for MemoryStore."""
+
 from datetime import datetime, timezone
 
 import pytest
-
 from models import DataResourceRecord
-from store import MemoryStore
 
 
 @pytest.mark.asyncio

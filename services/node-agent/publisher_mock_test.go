@@ -52,11 +52,6 @@ func statusError(code int32, msg string) error {
 	}
 }
 
-// makeK8sNotFoundError returns a k8s 404 error (satisfies k8serrors.IsNotFound).
-func makeK8sNotFoundError() error {
-	return k8serrors.NewNotFound(schema.GroupResource{}, "obj")
-}
-
 // Ensure runtime.Object is satisfied by unstructured.Unstructured (compile-time check).
 var _ runtime.Object = &unstructured.Unstructured{}
 

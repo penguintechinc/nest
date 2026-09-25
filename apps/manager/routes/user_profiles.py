@@ -1,11 +1,13 @@
 """User profile management routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth
-from utils.crypto import generate_api_key, encrypt_field as encrypt_value
+from utils.crypto import encrypt_field as encrypt_value
+from utils.crypto import generate_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,7 @@ profiles_bp = Blueprint("profiles_bp", __name__, url_prefix="/api/v1")
 @require_auth
 async def get_profile(user_id: int):
     """Get user profile."""
+
     def _query():
         db = get_db()
         row = db(db.user_profile.user_id == user_id).select().first()
@@ -47,7 +50,6 @@ async def update_profile(user_id: int):
         return jsonify({"error": "No valid fields to update"}), 400
 
     def _update():
-
         db = get_db()
         row = db(db.user_profile.user_id == user_id).select().first()
         if not row:
@@ -74,16 +76,13 @@ async def regenerate_api_key(user_id: int):
         return jsonify({"error": "Insufficient permissions"}), 403
 
     def _regenerate():
-
         db = get_db()
         row = db(db.user_profile.user_id == user_id).select().first()
         if not row:
             return None, None
         new_key = generate_api_key()
         encrypted = encrypt_value(new_key)
-        db(db.user_profile.user_id == user_id).update(
-            api_key_encrypted=encrypted
-        )
+        db(db.user_profile.user_id == user_id).update(api_key_encrypted=encrypted)
         db.commit()
         return new_key, True
 
@@ -91,4 +90,12 @@ async def regenerate_api_key(user_id: int):
     if not ok:
         return jsonify({"error": "Profile not found"}), 404
     # Return the plaintext key once — it will not be retrievable again
-    return jsonify({"api_key": new_key, "message": "Store this key securely; it will not be shown again"}), 200
+    return (
+        jsonify(
+            {
+                "api_key": new_key,
+                "message": "Store this key securely; it will not be shown again",
+            }
+        ),
+        200,
+    )

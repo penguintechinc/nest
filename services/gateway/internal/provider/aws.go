@@ -69,9 +69,9 @@ func (p *awsProvider) SetupProxy(ctx context.Context, cfg ExternalProviderConfig
 }
 
 func (p *awsProvider) CheckHealth(ctx context.Context, cfg ExternalProviderConfig) (*HealthResult, error) {
-	accessKey, _ := cfg.Extra["access_key_id"]
-	secretKey, _ := cfg.Extra["secret_access_key"]
-	sessionToken, _ := cfg.Extra["session_token"]
+	accessKey := cfg.Extra["access_key_id"]
+	secretKey := cfg.Extra["secret_access_key"]
+	sessionToken := cfg.Extra["session_token"]
 
 	if accessKey == "" || secretKey == "" {
 		return p.tcpProbeHealth(cfg)
@@ -90,9 +90,9 @@ func (p *awsProvider) CheckHealth(ctx context.Context, cfg ExternalProviderConfi
 }
 
 func (p *awsProvider) GetCostData(ctx context.Context, cfg ExternalProviderConfig) (*CostData, error) {
-	accessKey, _ := cfg.Extra["access_key_id"]
-	secretKey, _ := cfg.Extra["secret_access_key"]
-	sessionToken, _ := cfg.Extra["session_token"]
+	accessKey := cfg.Extra["access_key_id"]
+	secretKey := cfg.Extra["secret_access_key"]
+	sessionToken := cfg.Extra["session_token"]
 
 	if accessKey == "" || secretKey == "" {
 		return nil, &ErrNotSupported{Provider: "aws", Capability: "GetCostData"}
@@ -165,9 +165,9 @@ func (p *awsProvider) GetCostData(ctx context.Context, cfg ExternalProviderConfi
 }
 
 func (p *awsProvider) RotateCredential(ctx context.Context, cfg ExternalProviderConfig) (string, error) {
-	accessKey, _ := cfg.Extra["access_key_id"]
-	secretKey, _ := cfg.Extra["secret_access_key"]
-	sessionToken, _ := cfg.Extra["session_token"]
+	accessKey := cfg.Extra["access_key_id"]
+	secretKey := cfg.Extra["secret_access_key"]
+	sessionToken := cfg.Extra["session_token"]
 
 	if accessKey == "" || secretKey == "" {
 		return "", &ErrNotSupported{Provider: "aws", Capability: "RotateCredential"}

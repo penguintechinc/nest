@@ -185,12 +185,6 @@ type cephISCSICreateRequest struct {
 	TargetIQN string `json:"target_iqn"`
 }
 
-// cephISCSICreateTargetResponse is the response from Ceph-iSCSI API POST /api/target
-type cephISCSICreateTargetResponse struct {
-	TargetIQN string `json:"target_iqn"`
-	Status    string `json:"status"`
-}
-
 // cephISCSIAttachDiskRequest is the request body for Ceph-iSCSI API POST /api/target/{iqn}/disk
 type cephISCSIAttachDiskRequest struct {
 	Pool  string `json:"pool"`

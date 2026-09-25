@@ -15,7 +15,7 @@ on:
           description: the head sha
           required: true
       base_ref:
-          description: the base ref 
+          description: the base ref
           required: true
       installation_id:
           description: the installation id
@@ -33,6 +33,9 @@ jobs:
     timeout-minutes: 5
     runs-on: ubuntu-latest
     name: gitStream workflow automation
+    permissions:
+      pull-requests: write
+      contents: read
     steps:
       - name: Evaluate Rules
         uses: linear-b/gitstream-github-action@825397d4e97fe47dd3f27215dbd4e8e39d2e7a4b  # v2.0.2

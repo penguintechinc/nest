@@ -4,9 +4,9 @@ import logging
 import os
 from typing import Optional
 
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,9 @@ def _mask_secret(value: str, show_chars: int = 4) -> str:
     return "*" * (len(value) - show_chars) + value[-show_chars:]
 
 
-def load_or_generate_ec_key() -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
+def load_or_generate_ec_key() -> (
+    tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]
+):
     """Load EC P-256 private key from env or generate ephemeral key.
 
     Supports two env var formats:
@@ -40,9 +42,7 @@ def load_or_generate_ec_key() -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCu
             with open(key_path, "rb") as f:
                 private_pem = f.read()
             private_key = serialization.load_pem_private_key(
-                private_pem,
-                password=None,
-                backend=default_backend()
+                private_pem, password=None, backend=default_backend()
             )
             public_key = private_key.public_key()
             log.info(
@@ -61,11 +61,11 @@ def load_or_generate_ec_key() -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCu
     # Try loading from PEM string
     if key_pem:
         try:
-            private_pem_bytes = key_pem.encode("utf-8") if isinstance(key_pem, str) else key_pem
+            private_pem_bytes = (
+                key_pem.encode("utf-8") if isinstance(key_pem, str) else key_pem
+            )
             private_key = serialization.load_pem_private_key(
-                private_pem_bytes,
-                password=None,
-                backend=default_backend()
+                private_pem_bytes, password=None, backend=default_backend()
             )
             public_key = private_key.public_key()
             masked = _mask_secret(key_pem[:80] if len(key_pem) > 80 else key_pem)
@@ -96,7 +96,7 @@ def get_ec_public_key_pem(public_key: ec.EllipticCurvePublicKey) -> str:
     """Export EC public key as PEM-formatted string."""
     pem_bytes = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     return pem_bytes.decode("utf-8")
 
@@ -106,7 +106,7 @@ def get_ec_private_key_pem(private_key: ec.EllipticCurvePrivateKey) -> str:
     pem_bytes = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
+        encryption_algorithm=serialization.NoEncryption(),
     )
     return pem_bytes.decode("utf-8")
 
@@ -116,7 +116,9 @@ _PRIVATE_KEY: Optional[ec.EllipticCurvePrivateKey] = None
 _PUBLIC_KEY: Optional[ec.EllipticCurvePublicKey] = None
 
 
-def get_manager_ec_keys() -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
+def get_manager_ec_keys() -> (
+    tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]
+):
     """Get the cached manager EC P-256 keypair (singleton).
 
     Returns:

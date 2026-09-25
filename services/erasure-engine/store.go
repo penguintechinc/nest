@@ -330,7 +330,7 @@ func (s *ErasureStore) CreateRequest(r *ErasureRequest) (*ErasureRequest, error)
 	}
 
 	// Set defaults
-	if r.Backends == nil || len(r.Backends) == 0 {
+	if len(r.Backends) == 0 {
 		r.Backends = []string{"postgres", "kafka", "s3", "mongo", "iceberg"}
 	}
 
@@ -437,7 +437,7 @@ func (s *ErasureStore) orchestrateErasure(requestID string) {
 	defaultBackends := []string{"postgres", "kafka", "s3", "mongo", "iceberg"}
 
 	// Apply defaults if not set
-	if req.Backends == nil || len(req.Backends) == 0 {
+	if len(req.Backends) == 0 {
 		req.Backends = defaultBackends
 	}
 

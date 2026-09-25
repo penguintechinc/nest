@@ -16,14 +16,15 @@ from sqlalchemy.orm import DeclarativeBase
 
 class Base(DeclarativeBase):
     """Shared declarative base for all SQLAlchemy models."""
+
     pass
 
 
-# Import existing table models (baseline schema)
-from .existing import *  # noqa: F401, F403, E402
-
 # Import new ArticDBM feature tables
 from .articdbm import *  # noqa: F401, F403, E402
+
+# Import existing table models (baseline schema)
+from .existing import *  # noqa: F401, F403, E402
 
 # Import operations table model
 from .operations import *  # noqa: F401, F403, E402

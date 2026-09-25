@@ -1,4 +1,5 @@
 """TCP probe utilities for introspection."""
+
 import asyncio
 import re
 from typing import Optional, Tuple
@@ -38,9 +39,7 @@ def extract_host_port(
     return (conn_str, default_port)
 
 
-async def tcp_ping(
-    host: str, port: int, timeout: float = 5.0
-) -> Tuple[bool, int, str]:
+async def tcp_ping(host: str, port: int, timeout: float = 5.0) -> Tuple[bool, int, str]:
     """Probe TCP connection to host:port.
 
     Returns: (reachable, latency_ms, message)

@@ -1,4 +1,5 @@
 """Tests that Alembic migration infrastructure is properly configured."""
+
 from pathlib import Path
 
 BASE = Path(__file__).parent.parent
@@ -9,13 +10,13 @@ def test_alembic_ini_exists():
 
 
 def test_alembic_migrations_dir_exists():
-    assert (BASE / "migrations" / "versions").is_dir(), \
-        "migrations/versions/ directory must exist"
+    assert (
+        BASE / "migrations" / "versions"
+    ).is_dir(), "migrations/versions/ directory must exist"
 
 
 def test_alembic_env_exists():
-    assert (BASE / "migrations" / "env.py").exists(), \
-        "migrations/env.py must exist"
+    assert (BASE / "migrations" / "env.py").exists(), "migrations/env.py must exist"
 
 
 def test_initial_migration_exists():

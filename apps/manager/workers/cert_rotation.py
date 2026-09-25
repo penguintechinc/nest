@@ -13,48 +13,53 @@ Handles:
 - Rollback on failure with retry logic
 """
 
-import os
-import logging
-import time
 import json
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Tuple
+import logging
+import os
+import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
 from penguin_dal import DB as DAL
-
 
 logger = logging.getLogger(__name__)
 
 
 class CertRotationError(Exception):
     """Base exception for certificate rotation errors."""
+
     pass
 
 
 class CANotFoundError(CertRotationError):
     """CA not found or not available."""
+
     pass
 
 
 class CertificateRenewalError(CertRotationError):
     """Certificate renewal operation failed."""
+
     pass
 
 
 class K8sUpdateError(CertRotationError):
     """Kubernetes Secret update failed."""
+
     pass
 
 
 class NotificationError(CertRotationError):
     """Notification sending failed."""
+
     pass
 
 
 @dataclass
 class CertificateInfo:
     """Certificate information for renewal operations."""
+
     cert_id: int
     resource_id: Optional[int]
     ca_id: int
@@ -142,7 +147,9 @@ class CertRotationWorker:
         except KeyboardInterrupt:
             logger.info("Certificate Rotation Worker interrupted by user")
         except Exception as e:
-            logger.critical(f"Unexpected error in Certificate Rotation Worker: {e}", exc_info=True)
+            logger.critical(
+                f"Unexpected error in Certificate Rotation Worker: {e}", exc_info=True
+            )
         finally:
             self.stop()
 
@@ -173,12 +180,12 @@ class CertRotationWorker:
                     )
                     try:
                         self.notify_admin(
-                            cert_info,
-                            error=str(e),
-                            event_type="renewal_failed"
+                            cert_info, error=str(e), event_type="renewal_failed"
                         )
                     except NotificationError as ne:
-                        logger.error(f"Failed to send renewal failure notification: {ne}")
+                        logger.error(
+                            f"Failed to send renewal failure notification: {ne}"
+                        )
 
             else:
                 # Certificate expiring but auto_renew=False - notify admin
@@ -188,7 +195,7 @@ class CertRotationWorker:
                         self.notify_admin(
                             cert_info,
                             days_until_expiry=days_until_expiry,
-                            event_type="expiry_warning"
+                            event_type="expiry_warning",
                         )
                     except NotificationError as ne:
                         logger.error(f"Failed to send expiry warning: {ne}")
@@ -210,8 +217,8 @@ class CertRotationWorker:
 
             # Query certificates expiring within their renewal threshold
             certs = self.db(
-                (self.db.certificates.deleted_at.isnull()) &
-                (self.db.certificates.valid_until <= now + timedelta(days=30))
+                (self.db.certificates.deleted_at.isnull())
+                & (self.db.certificates.valid_until <= now + timedelta(days=30))
             ).select()
 
             expiring_certs = []
@@ -240,7 +247,9 @@ class CertRotationWorker:
                 if days_until_expiry <= cert.renewal_threshold_days:
                     expiring_certs.append(cert_info)
 
-            logger.debug(f"Found {len(expiring_certs)} certificates within renewal threshold")
+            logger.debug(
+                f"Found {len(expiring_certs)} certificates within renewal threshold"
+            )
             return expiring_certs
 
         except Exception as e:
@@ -294,7 +303,9 @@ class CertRotationWorker:
         except CANotFoundError:
             raise
         except Exception as e:
-            logger.error(f"Certificate renewal failed for {cert_id}: {e}", exc_info=True)
+            logger.error(
+                f"Certificate renewal failed for {cert_id}: {e}", exc_info=True
+            )
             raise CertificateRenewalError(f"Renewal operation failed: {e}")
 
     def update_k8s_secret(
@@ -331,22 +342,25 @@ class CertRotationWorker:
 
             # Prepare secret data (base64 encoded)
             import base64
+
             secret_data = {
                 "tls.crt": base64.b64encode(certificate_pem.encode()).decode(),
                 "tls.key": base64.b64encode(private_key_pem.encode()).decode(),
             }
 
             # Create or update secret
-            self.k8s_client.apply_manifest({
-                "apiVersion": "v1",
-                "kind": "Secret",
-                "metadata": {
-                    "name": resource.k8s_resource_name,
-                    "namespace": resource.k8s_namespace,
-                },
-                "type": "kubernetes.io/tls",
-                "data": secret_data,
-            })
+            self.k8s_client.apply_manifest(
+                {
+                    "apiVersion": "v1",
+                    "kind": "Secret",
+                    "metadata": {
+                        "name": resource.k8s_resource_name,
+                        "namespace": resource.k8s_namespace,
+                    },
+                    "type": "kubernetes.io/tls",
+                    "data": secret_data,
+                }
+            )
 
             logger.info(
                 f"Kubernetes Secret successfully updated for resource {resource.id}"
@@ -355,7 +369,7 @@ class CertRotationWorker:
         except Exception as e:
             logger.error(
                 f"Failed to update Kubernetes Secret for resource {resource.id}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise K8sUpdateError(f"Secret update failed: {e}")
 
@@ -407,10 +421,7 @@ class CertRotationWorker:
 
         try:
             message = self._build_notification_message(
-                cert_info,
-                event_type,
-                days_until_expiry,
-                error
+                cert_info, event_type, days_until_expiry, error
             )
 
             self.notification_handler.send(
@@ -428,7 +439,7 @@ class CertRotationWorker:
         except Exception as e:
             logger.error(
                 f"Failed to send notification for certificate {cert_info.cert_id}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise NotificationError(f"Notification failed: {e}")
 
@@ -460,7 +471,7 @@ class CertRotationWorker:
                     self.update_k8s_secret(
                         self.db.resources[cert_info.resource_id],
                         new_cert_pem,
-                        new_key_pem
+                        new_key_pem,
                     )
                 except K8sUpdateError as e:
                     logger.error(f"K8s update failed, rolling back: {e}")
@@ -472,7 +483,7 @@ class CertRotationWorker:
                     self.reload_external_resource_certificate(
                         self.db.resources[cert_info.resource_id],
                         new_cert_pem,
-                        new_key_pem
+                        new_key_pem,
                     )
                 except Exception as e:
                     logger.warning(
@@ -497,7 +508,7 @@ class CertRotationWorker:
                     "common_name": cert_info.common_name,
                     "valid_until": valid_until.isoformat(),
                     "k8s_updated": bool(cert_info.k8s_namespace),
-                }
+                },
             )
 
             # Step 6: Send notification
@@ -512,8 +523,7 @@ class CertRotationWorker:
             raise
         except Exception as e:
             logger.error(
-                f"Unexpected error during certificate renewal: {e}",
-                exc_info=True
+                f"Unexpected error during certificate renewal: {e}", exc_info=True
             )
             raise CertificateRenewalError(f"Unexpected error: {e}")
 

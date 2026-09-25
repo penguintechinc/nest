@@ -52,10 +52,10 @@ except ImportError:
 
 from . import Base
 
-
 # ---------------------------------------------------------------------------
 # 1. database_server — root table, no FK dependencies on articdbm tables
 # ---------------------------------------------------------------------------
+
 
 class DatabaseServer(Base):
     """Registered database servers managed by ArticDBM."""
@@ -77,6 +77,7 @@ class DatabaseServer(Base):
 # 2. user_permission — depends on users, database_server
 # ---------------------------------------------------------------------------
 
+
 class UserPermission(Base):
     """Fine-grained per-user database permissions."""
 
@@ -96,6 +97,7 @@ class UserPermission(Base):
 # ---------------------------------------------------------------------------
 # 3. user_profile — depends on users
 # ---------------------------------------------------------------------------
+
 
 class UserProfile(Base):
     """Extended user profile for ArticDBM (API keys, rate limits, 2FA).
@@ -120,6 +122,7 @@ class UserProfile(Base):
 # 4. temporary_access — depends on database_server, users
 # ---------------------------------------------------------------------------
 
+
 class TemporaryAccess(Base):
     """Short-lived, token-based access grants to a database server."""
 
@@ -138,6 +141,7 @@ class TemporaryAccess(Base):
 # ---------------------------------------------------------------------------
 # 5. security_rule — depends on database_server (nullable)
 # ---------------------------------------------------------------------------
+
 
 class SecurityRule(Base):
     """Named security rules applied to queries or connections."""
@@ -161,6 +165,7 @@ class SecurityRule(Base):
 # 6. managed_database — depends on database_server
 # ---------------------------------------------------------------------------
 
+
 class ManagedDatabase(Base):
     """A specific database within a managed server."""
 
@@ -178,6 +183,7 @@ class ManagedDatabase(Base):
 # ---------------------------------------------------------------------------
 # 7. sql_file — depends on database_server (nullable), users (nullable)
 # ---------------------------------------------------------------------------
+
 
 class SqlFile(Base):
     """Stored SQL files that can be executed against managed databases."""
@@ -199,6 +205,7 @@ class SqlFile(Base):
 # 8. blocked_database — depends on database_server
 # ---------------------------------------------------------------------------
 
+
 class BlockedDatabase(Base):
     """Databases explicitly blocked from access."""
 
@@ -216,6 +223,7 @@ class BlockedDatabase(Base):
 # 9. database_schema — depends on database_server
 # ---------------------------------------------------------------------------
 
+
 class DatabaseSchema(Base):
     """Cached schema snapshot for a database on a server."""
 
@@ -232,6 +240,7 @@ class DatabaseSchema(Base):
 # ---------------------------------------------------------------------------
 # 10. threat_intel_feed — no FK dependencies on articdbm tables
 # ---------------------------------------------------------------------------
+
 
 class ThreatIntelFeed(Base):
     """External threat intelligence feed source."""
@@ -253,6 +262,7 @@ class ThreatIntelFeed(Base):
 # 11. threat_intel_indicator — depends on threat_intel_feed
 # ---------------------------------------------------------------------------
 
+
 class ThreatIntelIndicator(Base):
     """Individual IOC (indicator of compromise) from a threat intel feed."""
 
@@ -271,6 +281,7 @@ class ThreatIntelIndicator(Base):
 # ---------------------------------------------------------------------------
 # 12. database_security_config — depends on database_server (unique)
 # ---------------------------------------------------------------------------
+
 
 class DatabaseSecurityConfig(Base):
     """Per-server security configuration (one row per server)."""
@@ -291,6 +302,7 @@ class DatabaseSecurityConfig(Base):
 # 13. threat_intel_match — depends on threat_intel_indicator, database_server
 # ---------------------------------------------------------------------------
 
+
 class ThreatIntelMatch(Base):
     """Record of a threat intel indicator matched against server activity."""
 
@@ -310,6 +322,7 @@ class ThreatIntelMatch(Base):
 # 14. license_info — no FK dependencies
 # ---------------------------------------------------------------------------
 
+
 class LicenseInfo(Base):
     """ArticDBM license key and feature entitlement cache."""
 
@@ -327,6 +340,7 @@ class LicenseInfo(Base):
 # ---------------------------------------------------------------------------
 # 15. cloud_provider — no FK dependencies on articdbm tables
 # ---------------------------------------------------------------------------
+
 
 class CloudProvider(Base):
     """Cloud provider account configuration.
@@ -351,6 +365,7 @@ class CloudProvider(Base):
 # 16. cloud_database_instance — depends on cloud_provider, database_server
 # ---------------------------------------------------------------------------
 
+
 class CloudDatabaseInstance(Base):
     """A cloud-managed database instance linked to a provider and server."""
 
@@ -371,6 +386,7 @@ class CloudDatabaseInstance(Base):
 # 17. scaling_policy — depends on database_server
 # ---------------------------------------------------------------------------
 
+
 class ScalingPolicy(Base):
     """Auto-scaling policy for a managed database server."""
 
@@ -390,6 +406,7 @@ class ScalingPolicy(Base):
 # ---------------------------------------------------------------------------
 # 18. scaling_event — depends on scaling_policy, database_server
 # ---------------------------------------------------------------------------
+
 
 class ScalingEvent(Base):
     """Record of a scaling action triggered by a scaling policy."""

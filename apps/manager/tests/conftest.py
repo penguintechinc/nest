@@ -1,9 +1,10 @@
 """Pytest configuration and fixtures."""
 
 import os
-import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
+
+from cryptography.fernet import Fernet
 
 # ============================================================================
 # CRITICAL: Set environment variables BEFORE any imports from app/routes/utils
@@ -20,18 +21,28 @@ os.environ.setdefault("DB_USER", "test")
 os.environ.setdefault("DB_PASS", "test")
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-testing-only")
 os.environ.setdefault("JWT_EXPIRY_HOURS", "24")
-os.environ.setdefault("ENCRYPTION_KEY", "3X2YMNotai4RWijtiWg_NuEt0L0fzmEwOrhmHMzc8mw=")  # Valid Fernet key for test encryption
+# Generated per test run rather than committed as a literal: a hardcoded Fernet
+# key looks like a credential to secret scanners and risks being reused outside
+# tests. Fernet.generate_key() gives a fresh, always-valid key.
+os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 # Disable HS256 admin override in tests (we use ES256)
 os.environ.setdefault("JWT_ALLOW_HS256", "false")
 
-from unittest.mock import patch, AsyncMock, MagicMock
-from jose import jwt
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.backends import default_backend
 
 import pytest
-from sqlalchemy import MetaData, Table, Column, String, Integer, Text, DateTime, create_engine
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ec
+from jose import jwt
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+)
 
 # ============================================================================
 # Test EC P-256 Keypair (generated once at module load)
@@ -45,7 +56,13 @@ _TEST_EC_PUBLIC_KEY = _TEST_EC_PRIVATE_KEY.public_key()
 # Test-mode JWT Token Generation & Validation (defined early for pytest_configure)
 # ============================================================================
 
-def _make_test_token(user_id: int = 1, email: str = "test@example.com", role: str = "admin", tenant: str = "test-tenant") -> str:
+
+def _make_test_token(
+    user_id: int = 1,
+    email: str = "test@example.com",
+    role: str = "admin",
+    tenant: str = "test-tenant",
+) -> str:
     """Create a test JWT token using ES256 (manager's algorithm).
 
     Test tokens have:
@@ -82,8 +99,9 @@ def _make_test_tenant_middleware(parse_token_fn):
 
     Returns an async function suitable for patching middleware.tenant.tenant_middleware.
     """
+
     async def _test_middleware():
-        from quart import request, g
+        from quart import g, request
         from werkzeug.exceptions import Unauthorized
 
         # Skip auth for health/ready/metrics
@@ -158,6 +176,7 @@ def _make_test_tenant_middleware(parse_token_fn):
 # Test-mode parse_token() for ES256 validation
 # ============================================================================
 
+
 def _make_test_parse_token():
     """Test-mode parse_token that accepts ES256 tokens signed with test key.
 
@@ -166,6 +185,7 @@ def _make_test_parse_token():
 
     Also accepts legacy test format: "sub:tenant:tier" for backward compat with existing test suite.
     """
+
     def _test_parse_token_sync(token: str) -> dict | None:
         # Try ES256 JWT first (test tokens)
         try:
@@ -173,7 +193,9 @@ def _make_test_parse_token():
             return {
                 "sub": decoded.get("sub", ""),
                 "tenant": decoded.get("tenant", "test-tenant"),
-                "scopes": decoded.get("scope", "").split() if decoded.get("scope") else [],
+                "scopes": (
+                    decoded.get("scope", "").split() if decoded.get("scope") else []
+                ),
                 "tier": decoded.get("tier", "free"),
             }
         except (jwt.ExpiredSignatureError, jwt.JWTError):
@@ -181,7 +203,9 @@ def _make_test_parse_token():
 
         # Fallback: try legacy format "sub:tenant:tier" (backward compat with existing tests)
         # Reject malformed versions with too many parts
-        if ":" in token and not token.startswith("eyJ"):  # Not a JWT (doesn't start with base64 header)
+        if ":" in token and not token.startswith(
+            "eyJ"
+        ):  # Not a JWT (doesn't start with base64 header)
             parts = token.split(":")
             if len(parts) == 3:  # Exactly 3 parts, not >= 3
                 return {
@@ -200,6 +224,7 @@ def _make_test_parse_token():
 # pytest_configure hook - patch EC key loading and middleware with test-mode handler
 # ============================================================================
 
+
 def pytest_configure(config):
     """Pytest hook: runs after env vars are set but before test collection.
 
@@ -211,7 +236,11 @@ def pytest_configure(config):
     """
     # Patch EC key loading to use test keypair (before any EC key imports)
     import utils.ec_keys
-    utils.ec_keys.get_manager_ec_keys = lambda: (_TEST_EC_PRIVATE_KEY, _TEST_EC_PUBLIC_KEY)
+
+    utils.ec_keys.get_manager_ec_keys = lambda: (
+        _TEST_EC_PRIVATE_KEY,
+        _TEST_EC_PUBLIC_KEY,
+    )
     utils.ec_keys._PRIVATE_KEY = _TEST_EC_PRIVATE_KEY
     utils.ec_keys._PUBLIC_KEY = _TEST_EC_PUBLIC_KEY
 
@@ -337,7 +366,9 @@ class _TestClientWithAuth:
             headers = kwargs.pop("headers", {})
             if "Authorization" not in headers:
                 # Use tenant-1 by default for internal endpoints (matches test expectations)
-                headers["Authorization"] = f"Bearer {_make_test_token(tenant='tenant-1')}"
+                headers["Authorization"] = (
+                    f"Bearer {_make_test_token(tenant='tenant-1')}"
+                )
             kwargs["headers"] = headers
         return await self._client.get(path, **kwargs)
 
@@ -347,7 +378,9 @@ class _TestClientWithAuth:
             headers = kwargs.pop("headers", {})
             if "Authorization" not in headers:
                 # Use tenant-1 by default for internal endpoints (matches test expectations)
-                headers["Authorization"] = f"Bearer {_make_test_token(tenant='tenant-1')}"
+                headers["Authorization"] = (
+                    f"Bearer {_make_test_token(tenant='tenant-1')}"
+                )
             kwargs["headers"] = headers
         return await self._client.post(path, **kwargs)
 
@@ -356,7 +389,9 @@ class _TestClientWithAuth:
         if path.startswith("/internal/"):
             headers = kwargs.pop("headers", {})
             if "Authorization" not in headers:
-                headers["Authorization"] = f"Bearer {_make_test_token(tenant='tenant-1')}"
+                headers["Authorization"] = (
+                    f"Bearer {_make_test_token(tenant='tenant-1')}"
+                )
             kwargs["headers"] = headers
         return await self._client.put(path, **kwargs)
 
@@ -365,7 +400,9 @@ class _TestClientWithAuth:
         if path.startswith("/internal/"):
             headers = kwargs.pop("headers", {})
             if "Authorization" not in headers:
-                headers["Authorization"] = f"Bearer {_make_test_token(tenant='tenant-1')}"
+                headers["Authorization"] = (
+                    f"Bearer {_make_test_token(tenant='tenant-1')}"
+                )
             kwargs["headers"] = headers
         return await self._client.delete(path, **kwargs)
 
@@ -374,7 +411,9 @@ class _TestClientWithAuth:
         if path.startswith("/internal/"):
             headers = kwargs.pop("headers", {})
             if "Authorization" not in headers:
-                headers["Authorization"] = f"Bearer {_make_test_token(tenant='tenant-1')}"
+                headers["Authorization"] = (
+                    f"Bearer {_make_test_token(tenant='tenant-1')}"
+                )
             kwargs["headers"] = headers
         return await self._client.patch(path, **kwargs)
 
@@ -446,6 +485,7 @@ async def store(memory_store):
 # Shared Auth Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def make_token():
     """Fixture providing token generation function.
@@ -471,14 +511,23 @@ def expired_token():
     """Factory for an ES256 token (signed with the test key) whose exp is in the
     past — so it passes signature validation but is rejected on expiry (401).
     """
-    def _expired(user_id: int = 1, email: str = "x@x.com",
-                 role: str = "admin", tenant: str = "test-tenant") -> str:
+
+    def _expired(
+        user_id: int = 1,
+        email: str = "x@x.com",
+        role: str = "admin",
+        tenant: str = "test-tenant",
+    ) -> str:
         now = datetime.now(timezone.utc)
         payload = {
-            "sub": str(user_id), "email": email, "role": role, "tenant": tenant,
+            "sub": str(user_id),
+            "email": email,
+            "role": role,
+            "tenant": tenant,
             "scope": "",
             "iat": now - timedelta(hours=2),
             "exp": now - timedelta(hours=1),
         }
         return jwt.encode(payload, _TEST_EC_PRIVATE_KEY, algorithm="ES256")
+
     return _expired

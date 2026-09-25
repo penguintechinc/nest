@@ -1,10 +1,9 @@
 """Error injection tests for SQLOperationStore exception handlers."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from models.operations import OperationRecord
 from store.sql_store import SQLOperationStore
 
@@ -56,9 +55,7 @@ class TestSQLOperationStoreErrorHandling:
         """Test list_by_tenant wraps database exceptions as ValueError."""
         mock_db = AsyncMock()
         mock_query_set = AsyncMock()
-        mock_query_set.select = AsyncMock(
-            side_effect=TimeoutError("Query timeout")
-        )
+        mock_query_set.select = AsyncMock(side_effect=TimeoutError("Query timeout"))
         mock_db.return_value = mock_query_set
 
         store = SQLOperationStore(mock_db)
@@ -113,9 +110,7 @@ class TestSQLOperationStoreErrorHandling:
         """Test create_operation when exists() check fails."""
         mock_db = AsyncMock()
         mock_query_set = AsyncMock()
-        mock_query_set.exists = AsyncMock(
-            side_effect=RuntimeError("Check failed")
-        )
+        mock_query_set.exists = AsyncMock(side_effect=RuntimeError("Check failed"))
         mock_db.return_value = mock_query_set
 
         store = SQLOperationStore(mock_db)

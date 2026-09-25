@@ -10,6 +10,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
 
@@ -17,22 +20,26 @@ jobs:
   # Determine version tag based on ref
   determine-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       VERSION: ${{ steps.version.outputs.VERSION }}
     steps:
       - name: Calculate version
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME}"
-          elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
             VERSION="gamma-$(date +%s)"
-          elif [[ "${{ github.ref }}" =~ refs/heads/(v|release/v) ]]; then
+          elif [[ "$GITHUB_REF" =~ refs/heads/(v|release/v) ]]; then
             VERSION="beta-$(date +%s)"
           else
             VERSION="alpha-$(date +%s)"
           fi
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_REF: ${{ github.ref }}
 
   # Build matrix for Nest Go services × platforms (parallel per-arch builds)
   build-platform:
@@ -121,6 +128,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4
@@ -179,12 +188,14 @@ jobs:
 
       - name: Create and push manifest (nest-${{ matrix.service }})
         run: |
-          VERSION="${{ needs.determine-version.outputs.VERSION }}"
-          REGISTRY_IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/nest-${{ matrix.service }}"
+          REGISTRY_IMAGE="${REGISTRY}/${{ github.repository }}/nest-${{ matrix.service }}"
           docker buildx imagetools create \
             -t "${REGISTRY_IMAGE}:${VERSION}" \
             "${REGISTRY_IMAGE}:${VERSION}-amd64" \
             "${REGISTRY_IMAGE}:${VERSION}-arm64"
+        env:
+          VERSION: ${{ needs.determine-version.outputs.VERSION }}
+          REGISTRY: ${{ env.REGISTRY }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0

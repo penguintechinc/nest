@@ -1,24 +1,25 @@
 """License management routes."""
+
 import asyncio
 import logging
 import os
-import requests
-from quart import Blueprint, jsonify, request, g
 
+import requests
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
 
 license_bp = Blueprint("license_bp", __name__, url_prefix="/api/v1")
 
-LICENSE_SERVER_URL = os.environ.get("LICENSE_SERVER_URL", "https://license.penguintech.io")
+LICENSE_SERVER_URL = os.environ.get(
+    "LICENSE_SERVER_URL", "https://license.penguintech.io"
+)
 PRODUCT_NAME = os.environ.get("PRODUCT_NAME", "nest")
 
 
 def _validate_with_server(license_key: str) -> dict:
-
-
     db = get_db()
     """Validate a license key against the PenguinTech license server (blocking)."""
     try:
@@ -38,6 +39,7 @@ def _validate_with_server(license_key: str) -> dict:
 @require_auth
 async def get_license():
     """Get current license information."""
+
     def _query():
         db = get_db()
         row = db(db.license_info.id > 0).select().first()
@@ -47,7 +49,9 @@ async def get_license():
         # Never expose the raw license key — mask it
         key = result.get("license_key", "")
         if key:
-            result["license_key"] = key[:8] + "****" + key[-4:] if len(key) > 12 else "****"
+            result["license_key"] = (
+                key[:8] + "****" + key[-4:] if len(key) > 12 else "****"
+            )
         return result
 
     license_data = await asyncio.to_thread(_query)
@@ -71,13 +75,17 @@ async def set_license():
     # Validate against license server
     validation = await asyncio.to_thread(_validate_with_server, license_key)
     if not validation.get("valid"):
-        return jsonify({
-            "error": "License validation failed",
-            "detail": validation.get("error", "Invalid license key"),
-        }), 422
+        return (
+            jsonify(
+                {
+                    "error": "License validation failed",
+                    "detail": validation.get("error", "Invalid license key"),
+                }
+            ),
+            422,
+        )
 
     def _upsert():
-
         db = get_db()
         existing = db(db.license_info.id > 0).select().first()
         if existing:
@@ -102,6 +110,7 @@ async def set_license():
 @require_role("admin")
 async def remove_license():
     """Remove license information."""
+
     def _delete():
         db = get_db()
         count = db(db.license_info.id > 0).count()

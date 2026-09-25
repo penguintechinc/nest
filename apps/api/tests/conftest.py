@@ -10,19 +10,20 @@ import json  # noqa: E402
 import os  # noqa: E402
 from datetime import datetime, timedelta, timezone  # noqa: E402
 from typing import Any, cast  # noqa: E402
-from unittest.mock import MagicMock  # noqa: E402
-from unittest.mock import patch  # noqa: E402
+from unittest.mock import (
+    MagicMock,  # noqa: E402
+    patch,  # noqa: E402
+)
 
 import jwt  # noqa: E402
 import pytest  # noqa: E402
+from app import create_app  # noqa: E402
 from cryptography.hazmat.backends import default_backend  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402
     RSAPrivateKey,
     RSAPublicKey,
 )
-
-from app import create_app  # noqa: E402
 from store.store import MemoryStore  # noqa: E402
 
 # Test RSA keypair (generated once per session)
@@ -183,9 +184,7 @@ def patch_kubernetes_client():  # type: ignore[no-untyped-def]
             "kubernetes.client.CustomObjectsApi",
             side_effect=mock_custom_objects_api,
         ),
-        patch(
-            "kubernetes.client.CoreV1Api", side_effect=mock_core_v1_api
-        ),
+        patch("kubernetes.client.CoreV1Api", side_effect=mock_core_v1_api),
     ):
         yield
 

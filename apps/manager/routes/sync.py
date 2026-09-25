@@ -1,12 +1,13 @@
 """Sync, blocking config, and seed routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
+from clients.db_proxy_grpc import get_db_proxy_client
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 from utils.redis_sync import sync_to_redis
-from clients.db_proxy_grpc import get_db_proxy_client
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ sync_bp = Blueprint("sync_bp", __name__, url_prefix="/api/v1")
 @require_auth
 async def sync_servers():
     """Sync database_server rows to Redis and trigger DB Proxy reload."""
+
     def _sync():
         db = get_db()
         return sync_to_redis(db)
@@ -34,11 +36,16 @@ async def sync_servers():
             logger.warning("DB Proxy reload did not return success status")
     except Exception as exc:
         logger.error("DB Proxy reload failed: %s", exc)
-        return jsonify({
-            "message": "Redis sync succeeded but DB Proxy reload failed",
-            "sync_result": result,
-            "db_proxy_error": str(exc),
-        }), 207
+        return (
+            jsonify(
+                {
+                    "message": "Redis sync succeeded but DB Proxy reload failed",
+                    "sync_result": result,
+                    "db_proxy_error": str(exc),
+                }
+            ),
+            207,
+        )
 
     return jsonify({"message": "Sync complete", "result": result}), 200
 
@@ -91,7 +98,6 @@ async def seed_blocked_resources():
     ]
 
     def _seed():
-
         db = get_db()
         inserted = 0
         for db_name in DEFAULT_BLOCKED:

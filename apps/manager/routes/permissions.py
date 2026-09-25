@@ -1,9 +1,10 @@
 """User permission management routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ async def create_permission():
 @require_auth
 async def get_permission(perm_id: int):
     """Get a single permission entry."""
+
     def _query():
         db = get_db()
         row = db.user_permission[perm_id]
@@ -79,6 +81,7 @@ async def get_permission(perm_id: int):
 @require_role("admin")
 async def delete_permission(perm_id: int):
     """Delete a permission entry."""
+
     def _delete():
         db = get_db()
         row = db.user_permission[perm_id]
@@ -98,6 +101,7 @@ async def delete_permission(perm_id: int):
 @require_auth
 async def get_user_permissions(user_id: int):
     """Get all permissions for a specific user."""
+
     def _query():
         db = get_db()
         rows = db(db.user_permission.user_id == user_id).select(

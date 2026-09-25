@@ -10,13 +10,13 @@ import json
 import logging
 import os
 import time
-from typing import Optional, Any
 from dataclasses import dataclass
+from typing import Any, Optional
 
 import jwt
 import requests
 from quart import g, request
-from werkzeug.exceptions import Unauthorized, Forbidden
+from werkzeug.exceptions import Forbidden, Unauthorized
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +24,11 @@ log = logging.getLogger(__name__)
 # Configuration
 # ============================================================================
 
-JWT_ALLOW_HS256 = os.environ.get("JWT_ALLOW_HS256", "false").lower() in ("true", "1", "yes")
+JWT_ALLOW_HS256 = os.environ.get("JWT_ALLOW_HS256", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
 
 # Load manager's EC public key for ES256 validation
@@ -37,6 +41,7 @@ def _get_manager_public_key() -> Any:
     if _MANAGER_PUBLIC_KEY is None:
         try:
             from utils.ec_keys import get_manager_ec_keys
+
             _, _MANAGER_PUBLIC_KEY = get_manager_ec_keys()
         except Exception as e:
             log.error("Failed to load manager EC public key: %s", e)
@@ -48,9 +53,11 @@ def _get_manager_public_key() -> Any:
 # JWKS Cache (for RS256 validation)
 # ============================================================================
 
+
 @dataclass(slots=True)
 class JWKSCache:
     """Cached JWKS data with TTL."""
+
     keys: list[dict]
     timestamp: float
 
@@ -108,6 +115,7 @@ def _get_key_from_jwks(kid: str, keys: list[dict]) -> Any:
 # ============================================================================
 # Token Parsing (Policy: ES256 → RS256 → HS256 with admin flag)
 # ============================================================================
+
 
 def parse_token(token: str) -> Optional[dict]:
     """Parse JWT token per algorithm policy.

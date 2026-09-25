@@ -1,10 +1,11 @@
 """Status and aggregate stats routes."""
+
 import asyncio
 import logging
 import os
-from quart import Blueprint, jsonify
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, jsonify
 from utils.auth import require_auth
 
 logger = logging.getLogger(__name__)
@@ -13,9 +14,7 @@ stats_bp = Blueprint("stats_bp", __name__, url_prefix="/api/v1")
 
 # Read VERSION from .version file at module load time if it exists.
 _VERSION = "1.0.0"
-_version_file = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", ".version"
-)
+_version_file = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".version")
 try:
     with open(_version_file) as _f:
         _VERSION = _f.read().strip().lstrip("v")
@@ -26,18 +25,24 @@ except OSError:
 @stats_bp.route("/status", methods=["GET"])
 async def status():
     """Service status endpoint (used by AppConsoleVersion). No auth required."""
-    return jsonify({
-        "version": _VERSION,
-        "build_epoch": 0,
-        "service": "nest-manager",
-        "status": "ok",
-    }), 200
+    return (
+        jsonify(
+            {
+                "version": _VERSION,
+                "build_epoch": 0,
+                "service": "nest-manager",
+                "status": "ok",
+            }
+        ),
+        200,
+    )
 
 
 @stats_bp.route("/stats", methods=["GET"])
 @require_auth
 async def aggregate_stats():
     """Return aggregate statistics for the manager service."""
+
     def _query():
         db = get_db()
         server_total = db(db.database_server.id > 0).count()

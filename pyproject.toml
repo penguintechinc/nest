@@ -1,0 +1,21 @@
+# Root Python tooling config.
+#
+# ruff is the single Python linter/formatter/import-sorter (per backend-python.md:
+# "ruff is the only Python linter/formatter — never run flake8/black/isort
+# alongside it"). This file is read by both CI and the local pre-commit ruff hook,
+# so the two can no longer diverge — the previous split (CI ran black/isort/flake8
+# while the pre-commit hook ran ruff) produced formatting neither side could satisfy.
+[tool.ruff]
+line-length = 88
+# Matches the CI runtime (PYTHON_VERSION 3.12). Raising to py313 per the standard
+# is a separate change — it can surface new lint and belongs with the 3.13 bump.
+target-version = "py312"
+extend-exclude = [".worktrees", "migrations", "alembic"]
+
+[tool.ruff.lint]
+# Gate parity with the prior flake8 invocation (--select=E9,F63,F7,F82) plus I
+# (import sorting, replacing isort). ruff's full default ruleset surfaces ~105
+# pre-existing findings (F841 unused-var, F811 redefinition, E402, …); those are
+# tracked as a follow-up cleanup rather than gated here, so this toolchain
+# convergence lands green instead of turning CI red on legacy debt.
+select = ["E9", "F63", "F7", "F82", "I"]

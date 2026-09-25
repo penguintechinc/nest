@@ -1,11 +1,12 @@
 """Tests for threat intelligence parsers."""
+
 import json
-import pytest
+
 from utils.threat_intel_parsers import (
-    parse_stix_indicators,
-    parse_openioc_indicators,
+    ThreatIndicator,
     parse_misp_event,
-    ThreatIndicator
+    parse_openioc_indicators,
+    parse_stix_indicators,
 )
 
 
@@ -15,10 +16,7 @@ class TestThreatIndicator:
     def test_threat_indicator_creation(self):
         """Test ThreatIndicator creation with all fields."""
         indicator = ThreatIndicator(
-            indicator_type="ip",
-            value="192.168.1.1",
-            confidence=80,
-            severity="high"
+            indicator_type="ip", value="192.168.1.1", confidence=80, severity="high"
         )
         assert indicator.indicator_type == "ip"
         assert indicator.value == "192.168.1.1"
@@ -27,17 +25,13 @@ class TestThreatIndicator:
 
     def test_threat_indicator_default_confidence(self):
         """Test ThreatIndicator default confidence value."""
-        indicator = ThreatIndicator(
-            indicator_type="domain",
-            value="example.com"
-        )
+        indicator = ThreatIndicator(indicator_type="domain", value="example.com")
         assert indicator.confidence == 50
 
     def test_threat_indicator_default_severity(self):
         """Test ThreatIndicator default severity value."""
         indicator = ThreatIndicator(
-            indicator_type="hash",
-            value="d41d8cd98f00b204e9800998ecf8427e"
+            indicator_type="hash", value="d41d8cd98f00b204e9800998ecf8427e"
         )
         assert indicator.severity == "medium"
 
@@ -55,25 +49,24 @@ class TestParseStixIndicators:
 
     def test_parse_stix_empty_bundle(self):
         """Test parsing empty STIX bundle."""
-        stix_json = json.dumps({
-            "type": "bundle",
-            "objects": []
-        })
+        stix_json = json.dumps({"type": "bundle", "objects": []})
         indicators = parse_stix_indicators(stix_json)
         assert len(indicators) == 0
 
     def test_parse_stix_ip_indicator(self):
         """Test parsing STIX IP indicator."""
-        stix_json = json.dumps({
-            "type": "bundle",
-            "objects": [
-                {
-                    "type": "indicator",
-                    "pattern": "[ipv4-addr:value = '192.168.1.1']",
-                    "confidence": 80
-                }
-            ]
-        })
+        stix_json = json.dumps(
+            {
+                "type": "bundle",
+                "objects": [
+                    {
+                        "type": "indicator",
+                        "pattern": "[ipv4-addr:value = '192.168.1.1']",
+                        "confidence": 80,
+                    }
+                ],
+            }
+        )
         indicators = parse_stix_indicators(stix_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "ip"
@@ -83,16 +76,18 @@ class TestParseStixIndicators:
 
     def test_parse_stix_domain_indicator(self):
         """Test parsing STIX domain indicator."""
-        stix_json = json.dumps({
-            "type": "bundle",
-            "objects": [
-                {
-                    "type": "indicator",
-                    "pattern": "[domain-name:value = 'malware.example.com']",
-                    "confidence": 75
-                }
-            ]
-        })
+        stix_json = json.dumps(
+            {
+                "type": "bundle",
+                "objects": [
+                    {
+                        "type": "indicator",
+                        "pattern": "[domain-name:value = 'malware.example.com']",
+                        "confidence": 75,
+                    }
+                ],
+            }
+        )
         indicators = parse_stix_indicators(stix_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "domain"
@@ -100,16 +95,18 @@ class TestParseStixIndicators:
 
     def test_parse_stix_url_indicator(self):
         """Test parsing STIX URL indicator."""
-        stix_json = json.dumps({
-            "type": "bundle",
-            "objects": [
-                {
-                    "type": "indicator",
-                    "pattern": "[url:value = 'http://malware.com/payload']",
-                    "confidence": 90
-                }
-            ]
-        })
+        stix_json = json.dumps(
+            {
+                "type": "bundle",
+                "objects": [
+                    {
+                        "type": "indicator",
+                        "pattern": "[url:value = 'http://malware.com/payload']",
+                        "confidence": 90,
+                    }
+                ],
+            }
+        )
         indicators = parse_stix_indicators(stix_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "url"
@@ -118,16 +115,18 @@ class TestParseStixIndicators:
 
     def test_parse_stix_hash_indicator(self):
         """Test parsing STIX file hash indicator."""
-        stix_json = json.dumps({
-            "type": "bundle",
-            "objects": [
-                {
-                    "type": "indicator",
-                    "pattern": "[file:hashes.'MD5' = 'd41d8cd98f00b204e9800998ecf8427e']",
-                    "confidence": 85
-                }
-            ]
-        })
+        stix_json = json.dumps(
+            {
+                "type": "bundle",
+                "objects": [
+                    {
+                        "type": "indicator",
+                        "pattern": "[file:hashes.'MD5' = 'd41d8cd98f00b204e9800998ecf8427e']",
+                        "confidence": 85,
+                    }
+                ],
+            }
+        )
         indicators = parse_stix_indicators(stix_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "hash"
@@ -135,16 +134,18 @@ class TestParseStixIndicators:
 
     def test_parse_stix_multiple_indicators(self):
         """Test parsing multiple STIX indicators."""
-        stix_json = json.dumps({
-            "type": "bundle",
-            "objects": [
-                {
-                    "type": "indicator",
-                    "pattern": "[ipv4-addr:value = '10.0.0.1'] OR [domain-name:value = 'evil.com']",
-                    "confidence": 70
-                }
-            ]
-        })
+        stix_json = json.dumps(
+            {
+                "type": "bundle",
+                "objects": [
+                    {
+                        "type": "indicator",
+                        "pattern": "[ipv4-addr:value = '10.0.0.1'] OR [domain-name:value = 'evil.com']",
+                        "confidence": 70,
+                    }
+                ],
+            }
+        )
         indicators = parse_stix_indicators(stix_json)
         # Should find both IP and domain in the pattern
         assert any(i.indicator_type == "ip" for i in indicators)
@@ -162,15 +163,9 @@ class TestParseStixIndicators:
 
     def test_parse_stix_no_pattern_field(self):
         """Test parsing STIX indicator without pattern field."""
-        stix_json = json.dumps({
-            "type": "bundle",
-            "objects": [
-                {
-                    "type": "indicator",
-                    "confidence": 80
-                }
-            ]
-        })
+        stix_json = json.dumps(
+            {"type": "bundle", "objects": [{"type": "indicator", "confidence": 80}]}
+        )
         indicators = parse_stix_indicators(stix_json)
         assert len(indicators) == 0
 
@@ -182,16 +177,18 @@ class TestParseStixIndicators:
             (30, "low"),
         ]
         for confidence, expected_severity in test_cases:
-            stix_json = json.dumps({
-                "type": "bundle",
-                "objects": [
-                    {
-                        "type": "indicator",
-                        "pattern": "[ipv4-addr:value = '1.1.1.1']",
-                        "confidence": confidence
-                    }
-                ]
-            })
+            stix_json = json.dumps(
+                {
+                    "type": "bundle",
+                    "objects": [
+                        {
+                            "type": "indicator",
+                            "pattern": "[ipv4-addr:value = '1.1.1.1']",
+                            "confidence": confidence,
+                        }
+                    ],
+                }
+            )
             indicators = parse_stix_indicators(stix_json)
             assert len(indicators) == 1
             assert indicators[0].severity == expected_severity
@@ -208,44 +205,44 @@ class TestParseOpeniocIndicators:
 
     def test_parse_openioc_ip_indicator(self):
         """Test parsing OpenIOC IP indicator."""
-        xml_str = '''<?xml version="1.0"?>
+        xml_str = """<?xml version="1.0"?>
         <IOC xmlns="http://schemas.mandiant.com/2010/ioc">
             <IndicatorItem>
                 <Context document="ipaddress"></Context>
                 <Content>192.168.1.100</Content>
             </IndicatorItem>
-        </IOC>'''
+        </IOC>"""
         indicators = parse_openioc_indicators(xml_str)
         # Parser should find the indicator
         assert len(indicators) >= 0  # Relax assertion as parser behavior varies
 
     def test_parse_openioc_domain_indicator(self):
         """Test parsing OpenIOC domain indicator."""
-        xml_str = '''<?xml version="1.0"?>
+        xml_str = """<?xml version="1.0"?>
         <IOC xmlns="http://schemas.mandiant.com/2010/ioc">
             <IndicatorItem>
                 <Context document="domain"></Context>
                 <Content>badomain.com</Content>
             </IndicatorItem>
-        </IOC>'''
+        </IOC>"""
         indicators = parse_openioc_indicators(xml_str)
         assert len(indicators) >= 0  # Relax assertion as parser behavior varies
 
     def test_parse_openioc_hash_indicator(self):
         """Test parsing OpenIOC hash indicator."""
-        xml_str = '''<?xml version="1.0"?>
+        xml_str = """<?xml version="1.0"?>
         <IOC xmlns="http://schemas.mandiant.com/2010/ioc">
             <IndicatorItem>
                 <Context document="hash"></Context>
                 <Content>abc123def456</Content>
             </IndicatorItem>
-        </IOC>'''
+        </IOC>"""
         indicators = parse_openioc_indicators(xml_str)
         assert len(indicators) >= 0  # Relax assertion as parser behavior varies
 
     def test_parse_openioc_multiple_indicators(self):
         """Test parsing multiple OpenIOC indicators."""
-        xml_str = '''<?xml version="1.0"?>
+        xml_str = """<?xml version="1.0"?>
         <IOC xmlns="http://schemas.mandiant.com/2010/ioc">
             <IndicatorItem>
                 <Context document="ipaddress"></Context>
@@ -255,7 +252,7 @@ class TestParseOpeniocIndicators:
                 <Context document="domain"></Context>
                 <Content>attack.com</Content>
             </IndicatorItem>
-        </IOC>'''
+        </IOC>"""
         indicators = parse_openioc_indicators(xml_str)
         assert len(indicators) >= 0  # Relax assertion as parser behavior varies
 
@@ -267,24 +264,24 @@ class TestParseOpeniocIndicators:
 
     def test_parse_openioc_missing_content(self):
         """Test parsing indicator without content element."""
-        xml_str = '''<?xml version="1.0"?>
+        xml_str = """<?xml version="1.0"?>
         <IOC xmlns="http://schemas.mandiant.com/2010/ioc">
             <IndicatorItem>
                 <Context document="ipaddress" />
             </IndicatorItem>
-        </IOC>'''
+        </IOC>"""
         indicators = parse_openioc_indicators(xml_str)
         assert len(indicators) == 0
 
     def test_parse_openioc_namespace_fallback(self):
         """Test parsing OpenIOC without namespace."""
-        xml_str = '''<?xml version="1.0"?>
+        xml_str = """<?xml version="1.0"?>
         <IOC>
             <IndicatorItem>
                 <context document="domain" />
                 <content>nonamespace.com</content>
             </IndicatorItem>
-        </IOC>'''
+        </IOC>"""
         indicators = parse_openioc_indicators(xml_str)
         # Should find at least one indicator using fallback parsing
         assert len(indicators) >= 0
@@ -295,26 +292,15 @@ class TestParseMispEvent:
 
     def test_parse_misp_empty_event(self):
         """Test parsing empty MISP event."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": []
-            }
-        })
+        misp_json = json.dumps({"Event": {"Attribute": []}})
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 0
 
     def test_parse_misp_ip_src_indicator(self):
         """Test parsing MISP source IP indicator."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {
-                        "type": "ip-src",
-                        "value": "203.0.113.45"
-                    }
-                ]
-            }
-        })
+        misp_json = json.dumps(
+            {"Event": {"Attribute": [{"type": "ip-src", "value": "203.0.113.45"}]}}
+        )
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "ip"
@@ -322,32 +308,18 @@ class TestParseMispEvent:
 
     def test_parse_misp_ip_dst_indicator(self):
         """Test parsing MISP destination IP indicator."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {
-                        "type": "ip-dst",
-                        "value": "198.51.100.20"
-                    }
-                ]
-            }
-        })
+        misp_json = json.dumps(
+            {"Event": {"Attribute": [{"type": "ip-dst", "value": "198.51.100.20"}]}}
+        )
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "ip"
 
     def test_parse_misp_domain_indicator(self):
         """Test parsing MISP domain indicator."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {
-                        "type": "domain",
-                        "value": "malicious.domain"
-                    }
-                ]
-            }
-        })
+        misp_json = json.dumps(
+            {"Event": {"Attribute": [{"type": "domain", "value": "malicious.domain"}]}}
+        )
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "domain"
@@ -355,16 +327,15 @@ class TestParseMispEvent:
 
     def test_parse_misp_url_indicator(self):
         """Test parsing MISP URL indicator."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {
-                        "type": "url",
-                        "value": "http://badsite.com/malware"
-                    }
-                ]
+        misp_json = json.dumps(
+            {
+                "Event": {
+                    "Attribute": [
+                        {"type": "url", "value": "http://badsite.com/malware"}
+                    ]
+                }
             }
-        })
+        )
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "url"
@@ -374,19 +345,15 @@ class TestParseMispEvent:
         hashes = [
             ("md5", "5d41402abc4b2a76b9719d911017c592"),
             ("sha1", "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"),
-            ("sha256", "2c26b46911185131006ba8c3d404675ae3dc8a14e3b4f7c90c7a24c3bdcc44"),
+            (
+                "sha256",
+                "2c26b46911185131006ba8c3d404675ae3dc8a14e3b4f7c90c7a24c3bdcc44",
+            ),
         ]
         for hash_type, hash_value in hashes:
-            misp_json = json.dumps({
-                "Event": {
-                    "Attribute": [
-                        {
-                            "type": hash_type,
-                            "value": hash_value
-                        }
-                    ]
-                }
-            })
+            misp_json = json.dumps(
+                {"Event": {"Attribute": [{"type": hash_type, "value": hash_value}]}}
+            )
             indicators = parse_misp_event(misp_json)
             assert len(indicators) == 1
             assert indicators[0].indicator_type == "hash"
@@ -394,16 +361,13 @@ class TestParseMispEvent:
 
     def test_parse_misp_ip_with_port(self):
         """Test parsing MISP IP with port (should extract IP only)."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {
-                        "type": "ip-src|port",
-                        "value": "192.168.1.1|443"
-                    }
-                ]
+        misp_json = json.dumps(
+            {
+                "Event": {
+                    "Attribute": [{"type": "ip-src|port", "value": "192.168.1.1|443"}]
+                }
             }
-        })
+        )
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "ip"
@@ -411,15 +375,17 @@ class TestParseMispEvent:
 
     def test_parse_misp_multiple_attributes(self):
         """Test parsing MISP event with multiple attributes."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {"type": "ip-src", "value": "10.0.0.1"},
-                    {"type": "domain", "value": "evil.com"},
-                    {"type": "md5", "value": "abc123"},
-                ]
+        misp_json = json.dumps(
+            {
+                "Event": {
+                    "Attribute": [
+                        {"type": "ip-src", "value": "10.0.0.1"},
+                        {"type": "domain", "value": "evil.com"},
+                        {"type": "md5", "value": "abc123"},
+                    ]
+                }
             }
-        })
+        )
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 3
 
@@ -436,38 +402,21 @@ class TestParseMispEvent:
 
     def test_parse_misp_missing_attributes(self):
         """Test parsing MISP event without Attribute field."""
-        misp_json = json.dumps({
-            "Event": {}
-        })
+        misp_json = json.dumps({"Event": {}})
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 0
 
     def test_parse_misp_unknown_type(self):
         """Test parsing MISP attribute with unknown type."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {
-                        "type": "unknown-type",
-                        "value": "something"
-                    }
-                ]
-            }
-        })
+        misp_json = json.dumps(
+            {"Event": {"Attribute": [{"type": "unknown-type", "value": "something"}]}}
+        )
         indicators = parse_misp_event(misp_json)
         assert len(indicators) == 0
 
     def test_parse_misp_missing_value(self):
         """Test parsing MISP attribute without value."""
-        misp_json = json.dumps({
-            "Event": {
-                "Attribute": [
-                    {
-                        "type": "ip-src"
-                    }
-                ]
-            }
-        })
+        misp_json = json.dumps({"Event": {"Attribute": [{"type": "ip-src"}]}})
         indicators = parse_misp_event(misp_json)
         # Should handle gracefully
         assert isinstance(indicators, list)
