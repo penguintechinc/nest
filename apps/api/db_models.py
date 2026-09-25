@@ -24,6 +24,7 @@ class DataResourceTable(Base):  # type: ignore[misc,valid-type]
     phase = Column(String(50), nullable=False)
     created_at = Column(String(50), nullable=False)
     updated_at = Column(String(50), nullable=False)
+    category = Column(String(50), default="")
     namespace = Column(String(255), default="")
     size_gi = Column(Integer, default=0)
     import_conn_str = Column(String(1024), default="")
@@ -50,6 +51,7 @@ class DataResourceTable(Base):  # type: ignore[misc,valid-type]
             "phase": self.phase,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
+            "category": self.category,
             "namespace": self.namespace,
             "sizeGi": self.size_gi,
             "importConnStr": self.import_conn_str,

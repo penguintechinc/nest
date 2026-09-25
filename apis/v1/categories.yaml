@@ -1,0 +1,28 @@
+# SSOT for the DataResource type→category mapping (Phase 0).
+# Hand-edit ONLY here. Go embeds this; Python bundles a drift-tested copy;
+# the CRD CEL rule is drift-tested against it. Keys are categories; each
+# lists the exact spec.type engine strings the controller switch dispatches.
+database:
+  - postgres
+  - mariadb
+  - mysql
+  - keyvalue
+  - timeseries
+  - vector
+  - rockfs
+object:
+  - object
+volume:
+  - pvc/block
+  - pvc/file
+  - nfs
+  - iscsi
+  - filesystem
+streaming:
+  - kafka
+search:
+  - search
+analytics:
+  - clickhouse
+  - warehouse/trino
+  - lakehouse/iceberg

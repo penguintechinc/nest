@@ -4,6 +4,8 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 
+from categories import all_types, category_for_type
+from gating import evaluate_category_gate
 from middleware import AuditEvent, emit_audit, get_claims, get_tenant
 from models import DataResourceRecord
 from quart import g, jsonify, request
@@ -121,16 +123,10 @@ async def create_data_resource(store: Store):
             400,
         )
 
-    valid_types = {
-        "pvc/block",
-        "pvc/file",
-        "object",
-        "nfs",
-        "iscsi",
-        "postgres",
-        "keyvalue",
-        "search",
-    }
+    # Sourced from the categories.yaml SSOT (via categories.all_types()) so the
+    # API's accepted types can never drift from the controller's 18-type
+    # dispatch surface or leave a category's engines unreachable by the gate.
+    valid_types = all_types()
     if resource_type not in valid_types:
         return (
             jsonify(
@@ -141,6 +137,39 @@ async def create_data_resource(store: Store):
                 }
             ),
             400,
+        )
+
+    # Two-layer category gate (PostHog rollout flag + license tier), fail-safe.
+    category = category_for_type(resource_type)
+    if category is None:
+        # Defense in depth, intentionally unreachable: valid_types is sourced
+        # from the same categories.yaml SSOT that category_for_type() reads,
+        # so every resource_type accepted above already has a category. Kept
+        # in case the two ever diverge (e.g. a future SSOT bug).
+        return (
+            jsonify(
+                {
+                    "code": "nest.validation.unknown_type",
+                    "message": f"Unknown resource type '{resource_type}'.",
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
+    tier = claims.tier if claims else "free"
+    # Offloaded: evaluate_category_gate makes a synchronous PostHog HTTP call
+    # and must never block the async event loop.
+    gate = await asyncio.to_thread(evaluate_category_gate, category, tier, tenant)
+    if not gate.allowed:
+        return (
+            jsonify(
+                {
+                    "code": gate.code,
+                    "message": gate.message,
+                    "requestId": request_id,
+                }
+            ),
+            403,
         )
 
     # Check free-tier limit (5 DataResources)
@@ -224,6 +253,7 @@ async def create_data_resource(store: Store):
         phase="pending",
         created_at=now,
         updated_at=now,
+        category=category,
         namespace=req.get("namespace", "default"),
         size_gi=req.get("sizeGi", 0),
         import_conn_str=import_conn_str,
@@ -436,7 +466,13 @@ async def delete_data_resource(store: Store):
 
 
 def _engine_type_for(resource_type: str) -> str:
-    """Map resource type to engine type."""
+    """Map resource type to engine type.
+
+    Not every resource_type accepted by valid_types (categories.all_types())
+    has an entry here yet — unmapped types default to "" rather than guessing;
+    see dataresource_controller.go's dispatch switch for the authoritative
+    per-type provisioning behavior.
+    """
     mapping = {
         "pvc/block": "block",
         "pvc/file": "filesystem",
@@ -445,12 +481,24 @@ def _engine_type_for(resource_type: str) -> str:
         "iscsi": "iscsi",
         "postgres": "postgres",
         "keyvalue": "redis",
+        "mariadb": "mariadb",
+        "mysql": "mysql",
+        "clickhouse": "clickhouse",
+        "kafka": "kafka",
+        "vector": "vector",
+        "timeseries": "timeseries",
     }
     return mapping.get(resource_type, "")
 
 
 def _driver_type_for(resource_type: str) -> str:
-    """Map resource type to driver type."""
+    """Map resource type to driver type.
+
+    Not every resource_type accepted by valid_types (categories.all_types())
+    has an entry here yet — unmapped types default to "" rather than guessing;
+    see dataresource_controller.go's dispatch switch for the authoritative
+    per-type provisioning behavior.
+    """
     mapping = {
         "pvc/block": "csi",
         "pvc/file": "csi",
@@ -459,5 +507,11 @@ def _driver_type_for(resource_type: str) -> str:
         "iscsi": "iscsi",
         "postgres": "cnpg",
         "keyvalue": "valkey",
+        "mariadb": "mariadb-operator",
+        "mysql": "mysql-operator",
+        "clickhouse": "altinity",
+        "kafka": "strimzi",
+        "vector": "cnpg",
+        "timeseries": "victoriametrics",
     }
     return mapping.get(resource_type, "")

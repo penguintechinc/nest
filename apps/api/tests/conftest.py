@@ -137,7 +137,6 @@ def patch_kubernetes_client():  # type: ignore[no-untyped-def]
 
     def mock_load_incluster_config():  # type: ignore[no-untyped-def]
         """Mock load_incluster_config to do nothing instead of raising."""
-        pass
 
     def mock_custom_objects_api(api_client):  # type: ignore[no-untyped-def]
         """Return a mock CustomObjectsApi."""
@@ -185,6 +184,23 @@ def patch_kubernetes_client():  # type: ignore[no-untyped-def]
             side_effect=mock_custom_objects_api,
         ),
         patch("kubernetes.client.CoreV1Api", side_effect=mock_core_v1_api),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def allow_category_gate():  # type: ignore[no-untyped-def]
+    """Default the DataResource category gate to ALLOW for all tests.
+
+    The gate (Task 6) defaults fail-safe OFF, which would 403 every existing
+    create-path test that predates gating. test_gating.py's handler-integration
+    tests override this per-test with a nested patch on the same target.
+    """
+    from gating import GateDecision
+
+    with patch(
+        "handlers.dataresource.evaluate_category_gate",
+        return_value=GateDecision(True, "", ""),
     ):
         yield
 

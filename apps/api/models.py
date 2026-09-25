@@ -52,6 +52,7 @@ class DataResourceRecord:
     phase: str  # pending | provisioning | ready | failed | deleting
     created_at: str  # ISO8601
     updated_at: str  # ISO8601
+    category: str = ""  # database | object | volume | streaming | search | analytics
     namespace: str = ""
     size_gi: int = 0
     # import fields
@@ -81,6 +82,7 @@ class DataResourceRecord:
             "phase": self.phase,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
+            "category": self.category,
             "namespace": self.namespace,
             "sizeGi": self.size_gi,
             "importConnStr": self.import_conn_str,
