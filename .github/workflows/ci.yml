@@ -525,23 +525,28 @@ jobs:
         npm audit --audit-level=high --json > npm-audit-results.json || true
       continue-on-error: true
 
-    # TEMP DIAGNOSTIC (remove after identifying the finding): print the exact
-    # HIGH/CRITICAL package+CVE to the log. Non-gating (exit-code 0) so it never
-    # affects the build; the gating scan below is unchanged.
-    - name: Trivy diagnostic table (TEMP)
+    # GATING: filesystem vulnerability scan — fails the build on any HIGH/CRITICAL
+    # fixable finding. Uses table output because trivy-action v0.36.0's
+    # `format: sarif` + `exit-code: 1` combination returns exit 1 even when the
+    # scan finds ZERO vulnerabilities (verified: an identical table-format scan
+    # reports 0 across all targets while the sarif+exit-code:1 step still failed).
+    # The gate is unchanged — a real HIGH/CRITICAL fixable finding still exits 1
+    # and fails the build; SARIF for code-scanning is produced by the separate
+    # non-gating step below. This is trivy-action's recommended gate+upload split.
+    - name: Run Trivy vulnerability scanner (gating)
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
-      continue-on-error: true
       with:
         scan-type: 'fs'
         scan-ref: '.'
         format: 'table'
         severity: 'HIGH,CRITICAL'
         ignore-unfixed: true
-        exit-code: '0'
+        exit-code: '1'
 
-    # GATING: filesystem vulnerability scan — fails on HIGH/CRITICAL fixable issues.
-    - name: Run Trivy vulnerability scanner
+    # Non-gating: produce SARIF for GitHub code-scanning (uploaded below).
+    - name: Generate Trivy SARIF (code-scanning)
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      continue-on-error: true
       with:
         scan-type: 'fs'
         scan-ref: '.'
@@ -549,7 +554,7 @@ jobs:
         output: 'trivy-results.sarif'
         severity: 'HIGH,CRITICAL'
         ignore-unfixed: true
-        exit-code: '1'
+        exit-code: '0'
 
     # Guard on the file existing: if the scan step above fails or is skipped the
     # SARIF is never written, and a bare `if: always()` turns one failure into two.
