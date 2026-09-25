@@ -525,6 +525,20 @@ jobs:
         npm audit --audit-level=high --json > npm-audit-results.json || true
       continue-on-error: true
 
+    # TEMP DIAGNOSTIC (remove after identifying the finding): print the exact
+    # HIGH/CRITICAL package+CVE to the log. Non-gating (exit-code 0) so it never
+    # affects the build; the gating scan below is unchanged.
+    - name: Trivy diagnostic table (TEMP)
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      continue-on-error: true
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        severity: 'HIGH,CRITICAL'
+        ignore-unfixed: true
+        exit-code: '0'
+
     # GATING: filesystem vulnerability scan — fails on HIGH/CRITICAL fixable issues.
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
