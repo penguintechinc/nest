@@ -27,7 +27,7 @@ permissions:
 env:
   GO_VERSION: '1.25.14'
   PYTHON_VERSION: '3.12'
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   REGISTRY: ghcr.io
 
 jobs:
@@ -201,7 +201,16 @@ jobs:
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip
-        pip install -r requirements.txt
+        # Root requirements.txt is a placeholder only (see its header comment) —
+        # the actual deps the pytest step below imports live per-app. Each
+        # uv-compiled lockfile is installed via its own `pip install -r`
+        # invocation rather than combined into one command: their hash-pinned
+        # transitive deps diverge (e.g. grpcio/protobuf/alembic versions differ
+        # between apps/api and apps/manager), and pip's hash-checking mode
+        # requires a single fully-consistent resolution across everything
+        # passed to one invocation.
+        pip install -r apps/api/requirements.txt
+        pip install -r apps/manager/requirements.txt
         # ruff is the single Python linter/formatter/import-sorter (replaces the
         # former black + isort + flake8). Pinned to the same version the local
         # pre-commit hook uses (.pre-commit-config.yaml) so CI and local agree.
@@ -483,10 +492,15 @@ jobs:
       continue-on-error: true
 
     # GATING: Go dependency vulnerabilities.
+    # golang/govulncheck-action hardcodes `go install .../govulncheck@latest`
+    # in its composite action with no version-pin input, so it can't be pinned
+    # through `with:`. @latest resolves to v1.8.0, which requires Go >=1.26 —
+    # this job runs GO_VERSION (1.25.14), so that install fails outright. Run
+    # govulncheck directly instead, pinned to v1.3.0 — the same pin the local
+    # pre-commit hook uses (.pre-commit-config.yaml), which is Go-1.25
+    # compatible and satisfies dependency pinning (no @latest).
     - name: Run govulncheck (Go dependency vulnerabilities)
-      uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee  # v1.0.4
-      with:
-        go-version-input: ${{ env.GO_VERSION }}
+      run: go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
 
     # GATING: high-severity / high-confidence Python SAST findings only (low noise).
     - name: Run bandit (Python security scanner)
