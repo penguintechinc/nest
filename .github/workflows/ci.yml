@@ -364,8 +364,10 @@ jobs:
     - name: Install dependencies
       run: |
         go mod download
-        pip install -r requirements.txt
+        pip install -r apps/api/requirements.txt
+        pip install -r apps/manager/requirements.txt
         npm ci
+        cd web && npm ci
 
     - name: Build applications
       run: |
