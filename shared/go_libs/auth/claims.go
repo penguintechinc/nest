@@ -12,10 +12,15 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
+
+// clockSkewLeewaySecs is the tolerated clock skew (seconds) applied to the
+// iat/nbf not-before checks.
+const clockSkewLeewaySecs = 30
 
 type contextKey struct{}
 
@@ -211,6 +216,22 @@ func verifySignature(header, payload, signature string, hdr jwtHeader, jwks *jwk
 	}
 }
 
+// audienceMatches reports whether the raw "aud" claim (a string or array of
+// strings per RFC 7519) contains the expected audience.
+func audienceMatches(raw interface{}, expected string) bool {
+	switch v := raw.(type) {
+	case string:
+		return v == expected
+	case []interface{}:
+		for _, a := range v {
+			if s, ok := a.(string); ok && s == expected {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ParseToken parses and validates a JWT against the JWKS endpoint.
 func ParseToken(token, jwksURL string) (*Claims, error) {
 	if jwksURL == "" {
@@ -264,14 +285,47 @@ func ParseToken(token, jwksURL string) (*Claims, error) {
 	}
 	if v, ok := raw["iat"].(float64); ok {
 		cl.IssuedAt = int64(v)
-		if cl.IssuedAt > time.Now().Unix()+30 {
+		if cl.IssuedAt > time.Now().Unix()+clockSkewLeewaySecs {
 			return nil, fmt.Errorf("token issued in the future")
 		}
 	}
-	if v, ok := raw["exp"].(float64); ok {
-		cl.Expires = int64(v)
-		if cl.Expires > 0 && time.Now().Unix() > cl.Expires {
-			return nil, fmt.Errorf("token expired")
+
+	// Require exp: a token with no expiry never expires, so reject it outright.
+	expVal, ok := raw["exp"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("token missing required 'exp' claim")
+	}
+	cl.Expires = int64(expVal)
+	if time.Now().Unix() > cl.Expires {
+		return nil, fmt.Errorf("token expired")
+	}
+
+	// Honor nbf (not-before) when present.
+	if v, ok := raw["nbf"].(float64); ok {
+		if time.Now().Unix()+clockSkewLeewaySecs < int64(v) {
+			return nil, fmt.Errorf("token not yet valid (nbf)")
+		}
+	}
+
+	// Validate iss/aud only when an expected value is configured, so this is a
+	// no-op for callers that do not set these (backward compatible). See note:
+	// the shared ParseToken signature carries no expected aud/iss, so the
+	// expected values are read from the same OIDC_ISSUER/OIDC_AUDIENCE
+	// environment configuration the Python verifier uses rather than being
+	// hardcoded. A dedicated audience/issuer per service would require plumbing
+	// new parameters through AuthMiddleware and is deferred.
+	if expectedIss := strings.TrimSpace(os.Getenv("OIDC_ISSUER")); expectedIss != "" {
+		iss, _ := raw["iss"].(string)
+		if iss == "" {
+			return nil, fmt.Errorf("token missing required 'iss' claim")
+		}
+		if iss != expectedIss {
+			return nil, fmt.Errorf("token issuer %q does not match expected %q", iss, expectedIss)
+		}
+	}
+	if expectedAud := strings.TrimSpace(os.Getenv("OIDC_AUDIENCE")); expectedAud != "" {
+		if !audienceMatches(raw["aud"], expectedAud) {
+			return nil, fmt.Errorf("token audience does not match expected %q", expectedAud)
 		}
 	}
 

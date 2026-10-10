@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from penguin_dal.quart_ext import get_db
-from quart import Blueprint, jsonify, request
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,11 @@ async def list_audit_log():
         page = 1
     if per_page < 1 or per_page > 200:
         per_page = 50
+
+    # Non-admins may only read their own audit entries; admins see all.
+    is_admin = g.user_role == "admin"
+    if not is_admin:
+        user_id = g.user_id
 
     def _query():
         db = get_db()

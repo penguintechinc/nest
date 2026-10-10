@@ -2,6 +2,7 @@ package models
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"time"
 
@@ -32,10 +33,16 @@ func (u *User) BeforeSave(tx *gorm.DB) error {
 	return nil
 }
 
-// VerifyPassword checks if the provided password matches the stored hash
+// VerifyPassword checks if the provided password matches the stored hash.
+// The comparison is constant-time to avoid leaking the hash via timing.
+//
+// NOTE: this still uses unsalted SHA-256, which is weak. Replacing it with a
+// salted/strong hasher (bcrypt/argon2) requires a migration path for existing
+// stored hashes and is deferred to a dedicated migration.
 func (u *User) VerifyPassword(password string) bool {
 	hash := sha256.Sum256([]byte(password))
-	return u.Password == hex.EncodeToString(hash[:])
+	computed := hex.EncodeToString(hash[:])
+	return subtle.ConstantTimeCompare([]byte(u.Password), []byte(computed)) == 1
 }
 
 // UserClaims represents JWT claims

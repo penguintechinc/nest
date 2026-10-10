@@ -18,6 +18,9 @@ profiles_bp = Blueprint("profiles_bp", __name__, url_prefix="/api/v1")
 @require_auth
 async def get_profile(user_id: int):
     """Get user profile."""
+    # Non-admins may only read their own profile
+    if g.user_role != "admin" and g.user_id != user_id:
+        return jsonify({"error": "Insufficient permissions"}), 403
 
     def _query():
         db = get_db()
