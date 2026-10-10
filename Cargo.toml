@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = ["crates/nest-gating", "services/svc-streaming"]
+exclude = ["pkg/sdk/rust"]
+
+[workspace.package]
+edition = "2021"
+license = "PROPRIETARY"
+
+[workspace.dependencies]
+tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread", "signal"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.152"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
