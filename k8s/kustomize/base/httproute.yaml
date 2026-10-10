@@ -10,7 +10,37 @@ spec:
       sectionName: https
   hostnames:
     - "nest.penguintech.cloud"
+  # More-specific /api/v1 prefixes are listed before the catch-all /api so a
+  # single origin reaches the whole product. Gateway API ranks matches by
+  # specificity (longest prefix wins), and they are ordered here to match that
+  # precedence explicitly; the /api -> nest-api rule remains the fallback.
   rules:
+    # Manager: nest-manager serves its routes directly under /api/v1
+    # (e.g. /api/v1/teams, /api/v1/license), so strip the /manager segment
+    # before forwarding.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v1/manager
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /api/v1
+      backendRefs:
+        - name: nest-manager
+          port: 8081
+    # Workflows: saga-engine serves /api/v1/workflows/* natively, so the path
+    # is forwarded as-is (no prefix rewrite).
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v1/workflows
+      backendRefs:
+        - name: nest-saga-engine
+          port: 50055
+    # Fallback: all other /api traffic goes to nest-api.
     - matches:
         - path:
             type: PathPrefix

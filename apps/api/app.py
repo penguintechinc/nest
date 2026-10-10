@@ -216,6 +216,7 @@ def create_app(store: Store | None = None) -> Quart:
 
     # Health checks (no auth required)
     @app.route("/health", methods=["GET"])
+    @app.route("/healthz", methods=["GET"])
     async def health():
         """Health check endpoint."""
         return jsonify({"status": "ok"})
