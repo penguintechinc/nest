@@ -319,9 +319,7 @@ def profile():
         # Defense in depth: persist only the allowlisted self-editable fields,
         # never request-derived privileged fields such as role/is_active, even
         # if they are somehow present in form.vars.
-        safe_vars = {
-            k: v for k, v in form.vars.items() if k in SELF_EDITABLE_FIELDS
-        }
+        safe_vars = {k: v for k, v in form.vars.items() if k in SELF_EDITABLE_FIELDS}
         auth.user.update(safe_vars)
         db.commit()
         response.flash = "Profile updated successfully"

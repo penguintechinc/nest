@@ -287,9 +287,7 @@ class TestResolvePublicTarget:
     async def test_metadata_host_blocked(self):
         with patch("asyncio.get_event_loop") as mock_loop:
             loop = mock_loop.return_value
-            loop.getaddrinfo = AsyncMock(
-                return_value=[_addrinfo("169.254.169.254")]
-            )
+            loop.getaddrinfo = AsyncMock(return_value=[_addrinfo("169.254.169.254")])
             with pytest.raises(BlockedTargetError):
                 await resolve_public_target("metadata.internal", 80)
 
