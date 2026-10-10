@@ -3,7 +3,6 @@
 from datetime import datetime, timezone
 
 import pytest
-
 from models import OperationRecord
 from store import SQLOperationStore
 
@@ -34,7 +33,9 @@ class TestSQLOperationStore:
         assert retrieved.tenant == "tenant-a"
         assert retrieved.phase == "pending"
 
-    async def test_create_operation_duplicate_raises(self, sql_store: SQLOperationStore) -> None:
+    async def test_create_operation_duplicate_raises(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test creating duplicate operation raises ValueError."""
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         operation = OperationRecord(
@@ -79,12 +80,16 @@ class TestSQLOperationStore:
         assert retrieved.phase == "running"
         assert retrieved.progress == 50
 
-    async def test_get_operation_not_found_raises(self, sql_store: SQLOperationStore) -> None:
+    async def test_get_operation_not_found_raises(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test getting non-existent operation raises ValueError."""
         with pytest.raises(ValueError, match="not found"):
             await sql_store.get_operation("tenant-a", "nonexistent")
 
-    async def test_get_operation_tenant_isolation(self, sql_store: SQLOperationStore) -> None:
+    async def test_get_operation_tenant_isolation(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test that operations are isolated by tenant."""
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         op_a = OperationRecord(
@@ -210,7 +215,9 @@ class TestSQLOperationStore:
         operation.phase = "running"
         operation.message = "In progress"
         operation.progress = 50
-        operation.updated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        operation.updated_at = (
+            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        )
         await sql_store.update_operation(operation)
 
         # Verify the update
@@ -219,7 +226,9 @@ class TestSQLOperationStore:
         assert retrieved.message == "In progress"
         assert retrieved.progress == 50
 
-    async def test_update_operation_not_found_raises(self, sql_store: SQLOperationStore) -> None:
+    async def test_update_operation_not_found_raises(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test updating non-existent operation raises ValueError."""
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         operation = OperationRecord(
@@ -237,7 +246,9 @@ class TestSQLOperationStore:
         with pytest.raises(ValueError, match="not found"):
             await sql_store.update_operation(operation)
 
-    async def test_update_operation_full_replace(self, sql_store: SQLOperationStore) -> None:
+    async def test_update_operation_full_replace(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test update performs full replace of all fields."""
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         operation = OperationRecord(
@@ -278,7 +289,9 @@ class TestSQLOperationStore:
         assert retrieved.error == "No errors"
         assert retrieved.progress == 100
 
-    async def test_list_pending_or_running_success(self, sql_store: SQLOperationStore) -> None:
+    async def test_list_pending_or_running_success(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test listing pending/running operations."""
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         ops = [
@@ -326,12 +339,16 @@ class TestSQLOperationStore:
         phases = {op.phase for op in pending_or_running}
         assert phases == {"pending", "running"}
 
-    async def test_list_pending_or_running_empty(self, sql_store: SQLOperationStore) -> None:
+    async def test_list_pending_or_running_empty(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test listing pending/running when none exist."""
         pending_or_running = await sql_store.list_pending_or_running()
         assert pending_or_running == []
 
-    async def test_list_pending_or_running_cross_tenant(self, sql_store: SQLOperationStore) -> None:
+    async def test_list_pending_or_running_cross_tenant(
+        self, sql_store: SQLOperationStore
+    ) -> None:
         """Test that list_pending_or_running returns operations across all tenants."""
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         ops = [

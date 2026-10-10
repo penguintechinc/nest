@@ -675,6 +675,7 @@ func TestIntrospect_AllResourceTypes(t *testing.T) {
 
 		if schema == nil {
 			t.Errorf("expected non-nil schema for %s", resourceType)
+			continue
 		}
 
 		if schema.ResourceType != resourceType {

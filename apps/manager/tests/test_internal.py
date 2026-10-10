@@ -1,4 +1,5 @@
 """Tests for internal endpoints via HTTP client."""
+
 import pytest
 
 
@@ -53,10 +54,12 @@ async def test_create_operation_invalid_json(client):
 @pytest.mark.asyncio
 async def test_create_operation_value_error(client, monkeypatch):
     """Test creating an operation when store raises ValueError."""
+
     async def mock_create_operation(operation):
         raise ValueError("Duplicate operation ID")
 
     from store.store import MemoryOperationStore
+
     store = MemoryOperationStore()
     monkeypatch.setattr(store, "create_operation", mock_create_operation)
 
@@ -79,10 +82,12 @@ async def test_create_operation_value_error(client, monkeypatch):
 @pytest.mark.asyncio
 async def test_create_operation_exception(client, monkeypatch):
     """Test creating an operation when store raises generic Exception."""
+
     async def mock_create_operation(operation):
         raise RuntimeError("Database connection failed")
 
     from store.store import MemoryOperationStore
+
     store = MemoryOperationStore()
     monkeypatch.setattr(store, "create_operation", mock_create_operation)
 

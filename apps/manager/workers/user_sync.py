@@ -13,14 +13,13 @@ Worker Features:
 - Implements retry logic and detailed error logging
 """
 
+import logging
 import os
+import signal
 import sys
 import time
-import signal
-import logging
-import json
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 # Import PyDAL database
 from models import db
@@ -54,8 +53,7 @@ except ImportError:
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -112,10 +110,7 @@ class UserSyncWorker:
                 logger.info("KeyboardInterrupt received, shutting down")
                 break
             except Exception as e:
-                logger.error(
-                    f"Unexpected error in worker loop: {e}",
-                    exc_info=True
-                )
+                logger.error(f"Unexpected error in worker loop: {e}", exc_info=True)
                 # Continue running despite errors
                 time.sleep(self.sleep_interval)
 
@@ -134,11 +129,10 @@ class UserSyncWorker:
         try:
             # Query for pending users
             pending_users = self.db(
-                (self.db.resource_users.sync_status == 'pending') |
-                (self.db.resource_users.sync_status == 'error')
+                (self.db.resource_users.sync_status == "pending")
+                | (self.db.resource_users.sync_status == "error")
             ).select(
-                limitby=(0, self.batch_size),
-                orderby=self.db.resource_users.created_at
+                limitby=(0, self.batch_size), orderby=self.db.resource_users.created_at
             )
 
             if not pending_users:
@@ -154,15 +148,11 @@ class UserSyncWorker:
                     self.sync_user(resource_user.id)
                 except Exception as e:
                     logger.error(
-                        f"Error syncing user {resource_user.id}: {e}",
-                        exc_info=True
+                        f"Error syncing user {resource_user.id}: {e}", exc_info=True
                     )
 
         except Exception as e:
-            logger.error(
-                f"Error in sync_pending_users: {e}",
-                exc_info=True
-            )
+            logger.error(f"Error in sync_pending_users: {e}", exc_info=True)
 
     def sync_user(self, resource_user_id: int):
         """
@@ -193,7 +183,7 @@ class UserSyncWorker:
 
             # Update sync_status to 'syncing'
             try:
-                resource_user.update_record(sync_status='syncing')
+                resource_user.update_record(sync_status="syncing")
                 self.db.commit()
             except Exception as e:
                 self.db.rollback()
@@ -203,9 +193,7 @@ class UserSyncWorker:
                 # Load resource
                 resource = self.db.resources[resource_user.resource_id]
                 if not resource:
-                    raise ValueError(
-                        f"Resource {resource_user.resource_id} not found"
-                    )
+                    raise ValueError(f"Resource {resource_user.resource_id} not found")
 
                 # Load resource_type
                 resource_type = self.db.resource_types[resource.resource_type_id]
@@ -216,9 +204,7 @@ class UserSyncWorker:
 
                 # Get connector for this resource type
                 connector = self._get_connector(
-                    resource_type.name,
-                    resource.connection_info,
-                    resource.credentials
+                    resource_type.name, resource.connection_info, resource.credentials
                 )
 
                 if not connector:
@@ -228,9 +214,9 @@ class UserSyncWorker:
 
                 # Sync user to resource
                 user_data = {
-                    'username': resource_user.username,
-                    'password': resource_user.password_hash,
-                    'roles': resource_user.roles or [],
+                    "username": resource_user.username,
+                    "password": resource_user.password_hash,
+                    "roles": resource_user.roles or [],
                 }
 
                 # Check if user already exists on resource
@@ -251,9 +237,9 @@ class UserSyncWorker:
 
                 # Mark as synced
                 resource_user.update_record(
-                    sync_status='synced',
+                    sync_status="synced",
                     last_synced_at=datetime.utcnow(),
-                    sync_error=None
+                    sync_error=None,
                 )
                 self.db.commit()
 
@@ -270,25 +256,25 @@ class UserSyncWorker:
             self._handle_sync_error(
                 resource_user_id,
                 f"Connection error: {str(e)}",
-                "Connection failed - will retry"
+                "Connection failed - will retry",
             )
         except ValueError as e:
             self._handle_sync_error(
                 resource_user_id,
                 f"Configuration error: {str(e)}",
-                "Invalid configuration - requires manual review"
+                "Invalid configuration - requires manual review",
             )
         except PermissionError as e:
             self._handle_sync_error(
                 resource_user_id,
                 f"Authentication error: {str(e)}",
-                "Authentication failed - check credentials"
+                "Authentication failed - check credentials",
             )
         except Exception as e:
             self._handle_sync_error(
                 resource_user_id,
                 f"Sync failed: {str(e)}",
-                "Unexpected error occurred - check logs"
+                "Unexpected error occurred - check logs",
             )
 
     def delete_user(self, resource_user_id: int):
@@ -320,22 +306,16 @@ class UserSyncWorker:
             # Load resource
             resource = self.db.resources[resource_user.resource_id]
             if not resource:
-                raise ValueError(
-                    f"Resource {resource_user.resource_id} not found"
-                )
+                raise ValueError(f"Resource {resource_user.resource_id} not found")
 
             # Load resource_type
             resource_type = self.db.resource_types[resource.resource_type_id]
             if not resource_type:
-                raise ValueError(
-                    f"Resource type {resource.resource_type_id} not found"
-                )
+                raise ValueError(f"Resource type {resource.resource_type_id} not found")
 
             # Get connector for this resource type
             connector = self._get_connector(
-                resource_type.name,
-                resource.connection_info,
-                resource.credentials
+                resource_type.name, resource.connection_info, resource.credentials
             )
 
             if not connector:
@@ -358,8 +338,7 @@ class UserSyncWorker:
 
             # Mark as deleted (soft delete)
             resource_user.update_record(
-                deleted_at=datetime.utcnow(),
-                sync_status='synced'
+                deleted_at=datetime.utcnow(), sync_status="synced"
             )
             self.db.commit()
 
@@ -369,17 +348,14 @@ class UserSyncWorker:
             )
 
         except Exception as e:
-            logger.error(
-                f"Error deleting user {resource_user_id}: {e}",
-                exc_info=True
-            )
+            logger.error(f"Error deleting user {resource_user_id}: {e}", exc_info=True)
             raise
 
     def _get_connector(
         self,
         resource_type_name: str,
         connection_info: Optional[Dict[str, Any]],
-        credentials: Optional[Dict[str, Any]]
+        credentials: Optional[Dict[str, Any]],
     ):
         """
         Get the appropriate connector for a resource type.
@@ -407,39 +383,34 @@ class UserSyncWorker:
             return None
 
         try:
-            if resource_type_name == 'db-postgresql':
+            if resource_type_name == "db-postgresql":
                 return PostgreSQLConnector(connection_info, credentials)
 
-            elif resource_type_name == 'db-mariadb':
+            elif resource_type_name == "db-mariadb":
                 return MariaDBConnector(connection_info, credentials)
 
-            elif resource_type_name in ('db-redis', 'db-valkey'):
+            elif resource_type_name in ("db-redis", "db-valkey"):
                 return RedisConnector(connection_info, credentials)
 
-            elif resource_type_name == 'storage-ceph':
+            elif resource_type_name == "storage-ceph":
                 return CephConnector(connection_info, credentials)
 
-            elif resource_type_name == 'storage-san':
+            elif resource_type_name == "storage-san":
                 return SANConnector(connection_info, credentials)
 
             else:
-                logger.error(
-                    f"Unknown resource type: {resource_type_name}"
-                )
+                logger.error(f"Unknown resource type: {resource_type_name}")
                 return None
 
         except Exception as e:
             logger.error(
                 f"Error initializing connector for {resource_type_name}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             return None
 
     def _handle_sync_error(
-        self,
-        resource_user_id: int,
-        error_message: str,
-        user_message: str
+        self, resource_user_id: int, error_message: str, user_message: str
     ):
         """
         Handle synchronization errors and update database.
@@ -453,19 +424,17 @@ class UserSyncWorker:
             resource_user = self.db.resource_users[resource_user_id]
             if resource_user:
                 resource_user.update_record(
-                    sync_status='error',
-                    sync_error=user_message
+                    sync_status="error", sync_error=user_message
                 )
                 self.db.commit()
 
                 logger.error(
-                    f"Sync error for user {resource_user.username}: "
-                    f"{error_message}"
+                    f"Sync error for user {resource_user.username}: " f"{error_message}"
                 )
         except Exception as e:
             logger.error(
                 f"Error updating sync_error for user {resource_user_id}: {e}",
-                exc_info=True
+                exc_info=True,
             )
 
 
@@ -479,9 +448,9 @@ def main():
     - LOG_LEVEL: Logging level (default: INFO)
     """
     # Get configuration from environment variables
-    sync_interval = int(os.getenv('SYNC_INTERVAL', '30'))
-    batch_size = int(os.getenv('BATCH_SIZE', '10'))
-    log_level = os.getenv('LOG_LEVEL', 'INFO')
+    sync_interval = int(os.getenv("SYNC_INTERVAL", "30"))
+    batch_size = int(os.getenv("BATCH_SIZE", "10"))
+    log_level = os.getenv("LOG_LEVEL", "INFO")
 
     # Configure logging level
     logging.getLogger().setLevel(log_level)
@@ -489,7 +458,7 @@ def main():
     logger.info("=" * 70)
     logger.info("NEST UserSyncWorker Starting")
     logger.info("=" * 70)
-    logger.info(f"Configuration:")
+    logger.info("Configuration:")
     logger.info(f"  Sync Interval: {sync_interval}s")
     logger.info(f"  Batch Size: {batch_size}")
     logger.info(f"  Log Level: {log_level}")
@@ -497,18 +466,12 @@ def main():
 
     # Create and run worker
     try:
-        worker = UserSyncWorker(
-            sleep_interval=sync_interval,
-            batch_size=batch_size
-        )
+        worker = UserSyncWorker(sleep_interval=sync_interval, batch_size=batch_size)
         worker.run()
     except Exception as e:
-        logger.error(
-            f"Fatal error in UserSyncWorker: {e}",
-            exc_info=True
-        )
+        logger.error(f"Fatal error in UserSyncWorker: {e}", exc_info=True)
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

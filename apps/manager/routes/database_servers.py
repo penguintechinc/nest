@@ -1,10 +1,11 @@
 """Database server management routes."""
+
 import asyncio
 import logging
 import socket
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,6 @@ async def list_servers():
         per_page = 20
 
     def _query():
-
         db = get_db()
         offset = (page - 1) * per_page
         rows = db(db.database_server.active == True).select(
@@ -34,10 +34,15 @@ async def list_servers():
         return [r.as_dict() for r in rows], total
 
     servers, total = await asyncio.to_thread(_query)
-    return jsonify({
-        "data": servers,
-        "meta": {"page": page, "per_page": per_page, "total": total},
-    }), 200
+    return (
+        jsonify(
+            {
+                "data": servers,
+                "meta": {"page": page, "per_page": per_page, "total": total},
+            }
+        ),
+        200,
+    )
 
 
 @servers_bp.route("/servers", methods=["POST"])
@@ -54,7 +59,6 @@ async def create_server():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         server_id = db.database_server.insert(
             name=body["name"],
@@ -78,6 +82,7 @@ async def create_server():
 @require_auth
 async def get_server(server_id: int):
     """Get a single database server."""
+
     def _query():
         db = get_db()
         row = db.database_server[server_id]
@@ -98,7 +103,6 @@ async def update_server(server_id: int):
         return jsonify({"error": "Request body required"}), 400
 
     def _update():
-
         db = get_db()
         row = db.database_server[server_id]
         if not row:
@@ -120,6 +124,7 @@ async def update_server(server_id: int):
 @require_role("admin")
 async def delete_server(server_id: int):
     """Soft-delete a database server (sets active=False)."""
+
     def _soft_delete():
         db = get_db()
         row = db.database_server[server_id]
@@ -139,6 +144,7 @@ async def delete_server(server_id: int):
 @require_auth
 async def test_server_connectivity(server_id: int):
     """Test TCP connectivity to a database server."""
+
     def _get_server():
         db = get_db()
         row = db.database_server[server_id]
@@ -149,7 +155,6 @@ async def test_server_connectivity(server_id: int):
         return jsonify({"error": "Server not found"}), 404
 
     def _tcp_test():
-
         db = get_db()
         try:
             with socket.create_connection((server["host"], server["port"]), timeout=5):
@@ -158,10 +163,15 @@ async def test_server_connectivity(server_id: int):
             return False, str(exc)
 
     reachable, error = await asyncio.to_thread(_tcp_test)
-    return jsonify({
-        "server_id": server_id,
-        "host": server["host"],
-        "port": server["port"],
-        "reachable": reachable,
-        "error": error,
-    }), 200
+    return (
+        jsonify(
+            {
+                "server_id": server_id,
+                "host": server["host"],
+                "port": server["port"],
+                "reachable": reachable,
+                "error": error,
+            }
+        ),
+        200,
+    )

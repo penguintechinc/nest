@@ -27,10 +27,10 @@ func (p *cloudflareProvider) Validate(ctx context.Context, cfg ExternalProviderC
 func (p *cloudflareProvider) Discover(ctx context.Context, cfg ExternalProviderConfig) (*ExternalResourceInfo, error) {
 	info := &ExternalResourceInfo{EngineType: cfg.EngineType}
 
-	apiToken, _ := cfg.Extra["api_token"]
-	apiKey, _ := cfg.Extra["api_key"]
-	apiEmail, _ := cfg.Extra["api_email"]
-	accountID, _ := cfg.Extra["account_id"]
+	apiToken := cfg.Extra["api_token"]
+	apiKey := cfg.Extra["api_key"]
+	apiEmail := cfg.Extra["api_email"]
+	accountID := cfg.Extra["account_id"]
 
 	// If no credentials, return default endpoints
 	if (apiToken == "" && (apiKey == "" || apiEmail == "")) || accountID == "" {
@@ -160,10 +160,10 @@ func (p *cloudflareProvider) SetupProxy(ctx context.Context, cfg ExternalProvide
 }
 
 func (p *cloudflareProvider) GetCostData(ctx context.Context, cfg ExternalProviderConfig) (*CostData, error) {
-	apiToken, _ := cfg.Extra["api_token"]
-	apiKey, _ := cfg.Extra["api_key"]
-	apiEmail, _ := cfg.Extra["api_email"]
-	accountID, _ := cfg.Extra["account_id"]
+	apiToken := cfg.Extra["api_token"]
+	apiKey := cfg.Extra["api_key"]
+	apiEmail := cfg.Extra["api_email"]
+	accountID := cfg.Extra["account_id"]
 
 	// If no credentials, return not supported
 	if (apiToken == "" && (apiKey == "" || apiEmail == "")) || accountID == "" {
@@ -196,10 +196,10 @@ func (p *cloudflareProvider) GetCostData(ctx context.Context, cfg ExternalProvid
 }
 
 func (p *cloudflareProvider) CheckHealth(ctx context.Context, cfg ExternalProviderConfig) (*HealthResult, error) {
-	apiToken, _ := cfg.Extra["api_token"]
-	apiKey, _ := cfg.Extra["api_key"]
-	apiEmail, _ := cfg.Extra["api_email"]
-	accountID, _ := cfg.Extra["account_id"]
+	apiToken := cfg.Extra["api_token"]
+	apiKey := cfg.Extra["api_key"]
+	apiEmail := cfg.Extra["api_email"]
+	accountID := cfg.Extra["account_id"]
 
 	// If no credentials, return unknown
 	if (apiToken == "" && (apiKey == "" || apiEmail == "")) || accountID == "" {
@@ -315,9 +315,9 @@ func (p *cloudflareProvider) checkHealthKV(ctx context.Context, cfg ExternalProv
 }
 
 func (p *cloudflareProvider) RotateCredential(ctx context.Context, cfg ExternalProviderConfig) (string, error) {
-	apiToken, _ := cfg.Extra["api_token"]
-	apiKey, _ := cfg.Extra["api_key"]
-	apiEmail, _ := cfg.Extra["api_email"]
+	apiToken := cfg.Extra["api_token"]
+	apiKey := cfg.Extra["api_key"]
+	apiEmail := cfg.Extra["api_email"]
 
 	// Rotation only supported with API token auth
 	if apiToken == "" {

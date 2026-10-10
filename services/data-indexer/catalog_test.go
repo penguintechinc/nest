@@ -8,7 +8,7 @@ import (
 func TestNewCatalog(t *testing.T) {
 	catalog := NewCatalog()
 	if catalog == nil {
-		t.Errorf("expected non-nil catalog")
+		t.Fatalf("expected non-nil catalog")
 	}
 	if catalog.entries == nil {
 		t.Errorf("expected initialized entries map")

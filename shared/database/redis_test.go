@@ -166,8 +166,8 @@ func TestNewRedisFromURLEmptyURL(t *testing.T) {
 	if client != nil {
 		t.Errorf("Expected nil Redis client, got %v", client)
 	}
-	if err.Error() != "Redis URL not provided" {
-		t.Errorf("Expected 'Redis URL not provided' error, got '%s'", err.Error())
+	if err.Error() != "no Redis URL provided" {
+		t.Errorf("Expected 'no Redis URL provided' error, got '%s'", err.Error())
 	}
 }
 
@@ -788,8 +788,8 @@ func TestNewRedisFromURLEmptyRedisURL(t *testing.T) {
 	if client != nil {
 		t.Errorf("Expected nil client when error occurs")
 	}
-	if err.Error() != "Redis URL not provided" {
-		t.Errorf("Expected 'Redis URL not provided' error, got '%s'", err.Error())
+	if err.Error() != "no Redis URL provided" {
+		t.Errorf("Expected 'no Redis URL provided' error, got '%s'", err.Error())
 	}
 }
 

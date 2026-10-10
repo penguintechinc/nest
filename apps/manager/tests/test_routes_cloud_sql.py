@@ -1,11 +1,11 @@
 """Tests for cloud.py and sql_files.py routes."""
+
 import os
 import sys
 import types
-import json
-import pytest
-import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -126,6 +126,7 @@ def _make_user(
 ) -> MagicMock:
     """Build a mock user record."""
     from werkzeug.security import generate_password_hash
+
     user = MagicMock()
     user.id = user_id
     user.username = username
@@ -147,6 +148,7 @@ def _make_user(
 
 def _make_token(role: str = "admin") -> str:
     from utils.auth import create_token
+
     return create_token(user_id=1, email="test@example.com", role=role)
 
 
@@ -297,9 +299,7 @@ class TestSqlFileRoutes:
     async def test_upload_sql_file_success(self, app, db):
         """Test POST /api/v1/sql-files uploads a SQL file."""
         file_row = MagicMock()
-        file_row.as_dict = MagicMock(
-            return_value={"id": 100, "filename": "query.sql"}
-        )
+        file_row.as_dict = MagicMock(return_value={"id": 100, "filename": "query.sql"})
         db.sql_file.__getitem__.return_value = file_row
 
         token = _make_token("admin")
@@ -366,9 +366,7 @@ class TestSqlFileRoutes:
     async def test_upload_sql_file_large_content(self, app, db):
         """Test POST /api/v1/sql-files with large SQL content."""
         file_row = MagicMock()
-        file_row.as_dict = MagicMock(
-            return_value={"id": 100, "filename": "large.sql"}
-        )
+        file_row.as_dict = MagicMock(return_value={"id": 100, "filename": "large.sql"})
         db.sql_file.__getitem__.return_value = file_row
 
         token = _make_token("admin")

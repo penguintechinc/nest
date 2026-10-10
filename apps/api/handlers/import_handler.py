@@ -1,16 +1,16 @@
 """Import, introspect, snapshot, and restore handlers."""
+
 import asyncio
 import time
 import uuid
 from datetime import datetime
 
-from quart import jsonify, request, g
-from kubernetes import client, config
-
-from middleware import get_tenant, get_claims, emit_audit, AuditEvent
 from handlers.probe import extract_host_port, tcp_ping
-from store import Store
+from kubernetes import client, config
+from middleware import AuditEvent, emit_audit, get_claims, get_tenant
 from models import OperationRecord
+from quart import g, jsonify, request
+from store import Store
 
 
 async def snapshot_data_resource(store: Store):
@@ -224,16 +224,18 @@ async def restore_data_resource(store: Store):
         await store.create_operation(op)
 
         asyncio.create_task(
-            emit_audit(AuditEvent(
-                event_type="dataresource.restore_initiated",
-                tenant=tenant,
-                subject=claims.sub if claims else "",
-                resource="DataResource",
-                resource_name=name,
-                action="restore",
-                outcome="success",
-                request_id=request_id,
-            ))
+            emit_audit(
+                AuditEvent(
+                    event_type="dataresource.restore_initiated",
+                    tenant=tenant,
+                    subject=claims.sub if claims else "",
+                    resource="DataResource",
+                    resource_name=name,
+                    action="restore",
+                    outcome="success",
+                    request_id=request_id,
+                )
+            )
         )
         response = jsonify(
             {

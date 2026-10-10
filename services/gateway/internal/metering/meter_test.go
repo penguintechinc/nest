@@ -12,7 +12,7 @@ func TestNewMeter(t *testing.T) {
 	m := NewMeter(logger)
 
 	if m == nil {
-		t.Error("NewMeter() returned nil")
+		t.Fatal("NewMeter() returned nil")
 	}
 
 	if m.ch == nil {

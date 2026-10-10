@@ -1,14 +1,23 @@
 """OpenTelemetry tracing configuration for Nest API."""
+
 import os
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    SimpleSpanProcessor,
+    SpanExporter,
+    SpanExportResult,
+)
 from quart import Quart
 
 try:
-    from opentelemetry.instrumentation.quart import QuartInstrumentor as _QuartInstrumentor
+    from opentelemetry.instrumentation.quart import (
+        QuartInstrumentor as _QuartInstrumentor,
+    )
+
     _quart_instrumentor = _QuartInstrumentor()
 except ImportError:
     _quart_instrumentor = None
@@ -40,7 +49,9 @@ def configure_telemetry(app: Quart) -> None:
 
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if otlp_endpoint:
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+            OTLPSpanExporter,
+        )
 
         exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
         provider.add_span_processor(BatchSpanProcessor(exporter))

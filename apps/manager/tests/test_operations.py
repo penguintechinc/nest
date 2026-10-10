@@ -1,4 +1,5 @@
 """Tests for public operation endpoints via HTTP client."""
+
 import pytest
 
 BEARER = "sub:tenant-1:pro"
@@ -320,10 +321,12 @@ async def test_list_operations_with_pagination(client):
 @pytest.mark.asyncio
 async def test_get_operation_exception(client, monkeypatch):
     """Test getting an operation when store raises generic Exception."""
+
     async def mock_get_operation(tid, op_id):
         raise RuntimeError("Database error")
 
     from store.store import MemoryOperationStore
+
     store = MemoryOperationStore()
     monkeypatch.setattr(store, "get_operation", mock_get_operation)
 
@@ -340,10 +343,12 @@ async def test_get_operation_exception(client, monkeypatch):
 @pytest.mark.asyncio
 async def test_list_operations_exception(client, monkeypatch):
     """Test listing operations when store raises generic Exception."""
+
     async def mock_list_by_tenant(tid):
         raise RuntimeError("Database connection failed")
 
     from store.store import MemoryOperationStore
+
     store = MemoryOperationStore()
     monkeypatch.setattr(store, "list_by_tenant", mock_list_by_tenant)
 

@@ -1,9 +1,11 @@
 """Tests for database models module."""
+
 import os
 import sys
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Ensure app root is in sys.path
 app_root = Path(__file__).parent.parent
@@ -85,12 +87,14 @@ class TestUsersModel:
         """Test users model can be imported with mocked db."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import users
+
             assert users is not None
 
     def test_users_model_has_docstring(self):
         """Test users model has docstring."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import users
+
             assert users.__doc__ is not None
             # Just verify it has a docstring
             assert isinstance(users.__doc__, str)
@@ -99,6 +103,7 @@ class TestUsersModel:
         """Test users model documents its tables."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import users
+
             # Should have documentation
             assert users.__doc__ is not None
 
@@ -110,12 +115,14 @@ class TestThreatIntelModel:
         """Test threat_intel model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import threat_intel
+
             assert threat_intel is not None
 
     def test_threat_intel_model_has_docstring(self):
         """Test threat_intel model has docstring."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import threat_intel
+
             assert threat_intel.__doc__ is not None
             assert isinstance(threat_intel.__doc__, str)
 
@@ -123,6 +130,7 @@ class TestThreatIntelModel:
         """Test threat_intel model documents its tables."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import threat_intel
+
             doc = threat_intel.__doc__
             # Should have documentation
             assert doc is not None
@@ -135,12 +143,14 @@ class TestResourcesModel:
         """Test resources model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import resources
+
             assert resources is not None
 
     def test_resources_model_has_docstring(self):
         """Test resources model has docstring."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import resources
+
             assert resources.__doc__ is not None
 
 
@@ -151,12 +161,14 @@ class TestAuditModel:
         """Test audit model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import audit
+
             assert audit is not None
 
     def test_audit_model_has_docstring(self):
         """Test audit model has docstring."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import audit
+
             assert audit.__doc__ is not None
 
 
@@ -167,12 +179,14 @@ class TestCertificatesModel:
         """Test certificates model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import certificates
+
             assert certificates is not None
 
     def test_certificates_model_has_docstring(self):
         """Test certificates model has docstring."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import certificates
+
             assert certificates.__doc__ is not None
 
 
@@ -183,6 +197,7 @@ class TestCloudModel:
         """Test cloud model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import cloud
+
             assert cloud is not None
 
 
@@ -193,6 +208,7 @@ class TestDatabaseServersModel:
         """Test database_servers model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import database_servers
+
             assert database_servers is not None
 
 
@@ -203,6 +219,7 @@ class TestLicenseModel:
         """Test license model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import license
+
             assert license is not None
 
 
@@ -213,6 +230,7 @@ class TestPermissionsModel:
         """Test permissions model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import permissions
+
             assert permissions is not None
 
 
@@ -223,6 +241,7 @@ class TestScalingModel:
         """Test scaling model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import scaling
+
             assert scaling is not None
 
 
@@ -233,6 +252,7 @@ class TestSecurityModel:
         """Test security model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import security
+
             assert security is not None
 
 
@@ -243,6 +263,7 @@ class TestSqlFilesModel:
         """Test sql_files model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import sql_files
+
             assert sql_files is not None
 
 
@@ -253,6 +274,7 @@ class TestTeamsModel:
         """Test teams model can be imported."""
         with patch("penguin_dal.DB", MagicMock()):
             from models import teams
+
             assert teams is not None
 
 
@@ -264,6 +286,7 @@ class TestAllModelsImportable:
         # Just test that we can import the models package
         with patch("penguin_dal.DB", MagicMock()):
             import models
+
             assert models is not None
             assert hasattr(models, "db")
 
@@ -271,8 +294,8 @@ class TestAllModelsImportable:
         """Test models/__init__.py exports db."""
         with patch("penguin_dal.DB", MagicMock()):
             with patch("models.db", MagicMock()):
-                import importlib
                 import models
+
                 # Mock the actual db attribute
                 models.db = MagicMock()
                 assert hasattr(models, "db")

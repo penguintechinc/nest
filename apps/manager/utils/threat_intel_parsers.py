@@ -1,9 +1,11 @@
 """Threat intelligence feed parsers. CPU-bound - run in ProcessPoolExecutor."""
+
 import json
 import re
+from dataclasses import dataclass
+from typing import List
+
 import defusedxml.ElementTree as ET
-from dataclasses import dataclass, field
-from typing import List, Optional
 
 
 @dataclass(slots=True)
@@ -25,19 +27,29 @@ def parse_stix_indicators(stix_json: str) -> List[ThreatIndicator]:
                 continue
             pattern = obj.get("pattern", "")
             confidence = obj.get("confidence", 50)
-            severity = "high" if confidence > 75 else "medium" if confidence > 40 else "low"
+            severity = (
+                "high" if confidence > 75 else "medium" if confidence > 40 else "low"
+            )
             # Extract IP patterns
             for m in re.finditer(r"ipv4-addr:value\s*=\s*'([^']+)'", pattern):
-                indicators.append(ThreatIndicator("ip", m.group(1), confidence, severity))
+                indicators.append(
+                    ThreatIndicator("ip", m.group(1), confidence, severity)
+                )
             # Extract domain patterns
             for m in re.finditer(r"domain-name:value\s*=\s*'([^']+)'", pattern):
-                indicators.append(ThreatIndicator("domain", m.group(1), confidence, severity))
+                indicators.append(
+                    ThreatIndicator("domain", m.group(1), confidence, severity)
+                )
             # Extract URL patterns
             for m in re.finditer(r"url:value\s*=\s*'([^']+)'", pattern):
-                indicators.append(ThreatIndicator("url", m.group(1), confidence, severity))
+                indicators.append(
+                    ThreatIndicator("url", m.group(1), confidence, severity)
+                )
             # Extract file hash patterns
             for m in re.finditer(r"file:hashes\.'[^']+'\s*=\s*'([^']+)'", pattern):
-                indicators.append(ThreatIndicator("hash", m.group(1), confidence, severity))
+                indicators.append(
+                    ThreatIndicator("hash", m.group(1), confidence, severity)
+                )
     except (json.JSONDecodeError, KeyError):
         pass
     return indicators
@@ -70,10 +82,17 @@ def parse_misp_event(misp_json: str) -> List[ThreatIndicator]:
     """Parse MISP JSON event for indicators."""
     indicators = []
     type_map = {
-        "ip-src": "ip", "ip-dst": "ip", "ip-src|port": "ip", "ip-dst|port": "ip",
-        "domain": "domain", "hostname": "domain",
-        "url": "url", "uri": "url",
-        "md5": "hash", "sha1": "hash", "sha256": "hash",
+        "ip-src": "ip",
+        "ip-dst": "ip",
+        "ip-src|port": "ip",
+        "ip-dst|port": "ip",
+        "domain": "domain",
+        "hostname": "domain",
+        "url": "url",
+        "uri": "url",
+        "md5": "hash",
+        "sha1": "hash",
+        "sha256": "hash",
     }
     try:
         event = json.loads(misp_json)

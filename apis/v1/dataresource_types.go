@@ -21,6 +21,10 @@ type DataResource struct {
 type DataResourceSpec struct {
 	// Type is the resource type: postgres, object, pvc/block, pvc/file, keyvalue, etc.
 	Type string `json:"type"`
+	// Category is the coarse module this resource belongs to. Optional during
+	// Phase 0 (backfilled); when set, spec.type must be a member of it.
+	// +optional
+	Category Category `json:"category,omitempty"`
 	// Class references a DataResourceClass name
 	Class string `json:"class"`
 	// Tenant is the tenant ID (mandatory)

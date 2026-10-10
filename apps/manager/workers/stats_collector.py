@@ -12,91 +12,90 @@ Features:
 - Configurable collection intervals
 """
 
-import os
-import time
 import logging
-from typing import Dict, List, Any, Optional
+import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
-import threading
-import json
+from typing import Any, Dict, List, Optional
 
-from prometheus_client import Gauge, Counter
+from prometheus_client import Counter, Gauge
 
 logger = logging.getLogger(__name__)
 
 
 # Prometheus metrics
 RESOURCE_CPU_PERCENT = Gauge(
-    'nest_resource_cpu_percent',
-    'Resource CPU usage percentage',
-    ['resource_id', 'resource_name']
+    "nest_resource_cpu_percent",
+    "Resource CPU usage percentage",
+    ["resource_id", "resource_name"],
 )
 
 RESOURCE_MEMORY_BYTES = Gauge(
-    'nest_resource_memory_bytes',
-    'Resource memory usage in bytes',
-    ['resource_id', 'resource_name']
+    "nest_resource_memory_bytes",
+    "Resource memory usage in bytes",
+    ["resource_id", "resource_name"],
 )
 
 RESOURCE_MEMORY_PERCENT = Gauge(
-    'nest_resource_memory_percent',
-    'Resource memory usage percentage',
-    ['resource_id', 'resource_name']
+    "nest_resource_memory_percent",
+    "Resource memory usage percentage",
+    ["resource_id", "resource_name"],
 )
 
 RESOURCE_DISK_USAGE_PERCENT = Gauge(
-    'nest_resource_disk_usage_percent',
-    'Resource disk usage percentage',
-    ['resource_id', 'resource_name']
+    "nest_resource_disk_usage_percent",
+    "Resource disk usage percentage",
+    ["resource_id", "resource_name"],
 )
 
 RESOURCE_NETWORK_IN_BYTES = Gauge(
-    'nest_resource_network_in_bytes',
-    'Network bytes received',
-    ['resource_id', 'resource_name']
+    "nest_resource_network_in_bytes",
+    "Network bytes received",
+    ["resource_id", "resource_name"],
 )
 
 RESOURCE_NETWORK_OUT_BYTES = Gauge(
-    'nest_resource_network_out_bytes',
-    'Network bytes transmitted',
-    ['resource_id', 'resource_name']
+    "nest_resource_network_out_bytes",
+    "Network bytes transmitted",
+    ["resource_id", "resource_name"],
 )
 
 RESOURCE_CONNECTIONS = Gauge(
-    'nest_resource_connections',
-    'Active connections',
-    ['resource_id', 'resource_name', 'connection_type']
+    "nest_resource_connections",
+    "Active connections",
+    ["resource_id", "resource_name", "connection_type"],
 )
 
 RESOURCE_CACHE_HIT_RATIO = Gauge(
-    'nest_resource_cache_hit_ratio',
-    'Cache hit ratio percentage',
-    ['resource_id', 'resource_name']
+    "nest_resource_cache_hit_ratio",
+    "Cache hit ratio percentage",
+    ["resource_id", "resource_name"],
 )
 
 RESOURCE_RISK_LEVEL = Gauge(
-    'nest_resource_risk_level',
-    'Resource risk level (0=low, 1=medium, 2=high, 3=critical)',
-    ['resource_id', 'resource_name']
+    "nest_resource_risk_level",
+    "Resource risk level (0=low, 1=medium, 2=high, 3=critical)",
+    ["resource_id", "resource_name"],
 )
 
 STATS_COLLECTION_ERRORS = Counter(
-    'nest_stats_collection_errors_total',
-    'Total statistics collection errors',
-    ['resource_id', 'resource_type']
+    "nest_stats_collection_errors_total",
+    "Total statistics collection errors",
+    ["resource_id", "resource_type"],
 )
 
 STATS_COLLECTION_DURATION = Gauge(
-    'nest_stats_collection_duration_seconds',
-    'Statistics collection duration',
-    ['operation']
+    "nest_stats_collection_duration_seconds",
+    "Statistics collection duration",
+    ["operation"],
 )
 
 
 @dataclass
 class RiskFactors:
     """Risk assessment factors for a resource."""
+
     disk_usage_percent: Optional[float] = None
     memory_percent: Optional[float] = None
     connection_saturation: Optional[float] = None
@@ -106,16 +105,17 @@ class RiskFactors:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage."""
         return {
-            'disk_usage_percent': self.disk_usage_percent,
-            'memory_percent': self.memory_percent,
-            'connection_saturation': self.connection_saturation,
-            'cpu_percent': self.cpu_percent,
-            'factors': self.factors,
+            "disk_usage_percent": self.disk_usage_percent,
+            "memory_percent": self.memory_percent,
+            "connection_saturation": self.connection_saturation,
+            "cpu_percent": self.cpu_percent,
+            "factors": self.factors,
         }
 
 
 class StatsCollectorException(Exception):
     """Base exception for stats collector errors."""
+
     pass
 
 
@@ -162,6 +162,7 @@ class StatsCollector:
         if self._k8s_client is None:
             try:
                 from apps.manager.lib.k8s_client import get_kubernetes_client
+
                 self._k8s_client = get_kubernetes_client()
             except Exception as e:
                 logger.warning(f"Failed to initialize Kubernetes client: {e}")
@@ -211,14 +212,16 @@ class StatsCollector:
 
         Runs until stop() is called, collecting stats every interval_seconds.
         """
-        logger.info(f"Stats collector worker loop started")
+        logger.info("Stats collector worker loop started")
 
         while not self._stop_event.is_set():
             try:
                 start_time = time.time()
                 self.collect_all_stats()
                 elapsed = time.time() - start_time
-                STATS_COLLECTION_DURATION.labels(operation='collect_all_stats').set(elapsed)
+                STATS_COLLECTION_DURATION.labels(operation="collect_all_stats").set(
+                    elapsed
+                )
 
                 # Sleep for remaining interval (or 0 if collection took longer)
                 remaining = max(0, self.interval_seconds - elapsed)
@@ -237,9 +240,9 @@ class StatsCollector:
         try:
             # Query all active resources in full or partial lifecycle mode
             resources = self.db(
-                (self.db.resources.status == 'active') &
-                (self.db.resources.lifecycle_mode.belongs(['full', 'partial'])) &
-                (self.db.resources.deleted_at == None)
+                (self.db.resources.status == "active")
+                & (self.db.resources.lifecycle_mode.belongs(["full", "partial"]))
+                & (self.db.resources.deleted_at == None)
             ).select()
 
             logger.debug(f"Collecting stats for {len(resources)} resources")
@@ -251,11 +254,11 @@ class StatsCollector:
                     logger.error(
                         f"Failed to collect stats for resource {resource.id} "
                         f"({resource.name}): {e}",
-                        exc_info=True
+                        exc_info=True,
                     )
                     STATS_COLLECTION_ERRORS.labels(
                         resource_id=str(resource.id),
-                        resource_type=resource.resource_type_id
+                        resource_type=resource.resource_type_id,
                     ).inc()
 
         except Exception as e:
@@ -273,7 +276,9 @@ class StatsCollector:
         resource_id = resource.id
         resource_name = resource.name
 
-        logger.debug(f"Collecting stats for resource {resource_name} (ID: {resource_id})")
+        logger.debug(
+            f"Collecting stats for resource {resource_name} (ID: {resource_id})"
+        )
 
         try:
             # Determine if resource is Kubernetes-based
@@ -304,12 +309,16 @@ class StatsCollector:
             # Export to Prometheus
             self.export_prometheus_metrics(resource, metrics, risk_level)
 
-            logger.debug(f"Stats collected for resource {resource_name}: "
-                        f"risk_level={risk_level}")
+            logger.debug(
+                f"Stats collected for resource {resource_name}: "
+                f"risk_level={risk_level}"
+            )
 
         except Exception as e:
-            logger.error(f"Error collecting stats for resource {resource_name}: {e}",
-                        exc_info=True)
+            logger.error(
+                f"Error collecting stats for resource {resource_name}: {e}",
+                exc_info=True,
+            )
             raise
 
     def _collect_k8s_metrics(self, resource: Any) -> Optional[Dict[str, Any]]:
@@ -322,7 +331,9 @@ class StatsCollector:
             Dictionary with collected metrics or None if collection failed
         """
         if not self.k8s_client:
-            logger.warning(f"Kubernetes client not available for resource {resource.name}")
+            logger.warning(
+                f"Kubernetes client not available for resource {resource.name}"
+            )
             return None
 
         try:
@@ -333,6 +344,7 @@ class StatsCollector:
             # Note: Requires metrics-server to be installed in the cluster
             try:
                 from kubernetes import client
+
                 custom_api = client.CustomObjectsApi()
 
                 metric_pod = custom_api.get_namespaced_custom_object(
@@ -353,8 +365,10 @@ class StatsCollector:
                 return None
 
         except Exception as e:
-            logger.error(f"Error collecting K8s metrics for resource {resource.name}: {e}",
-                        exc_info=True)
+            logger.error(
+                f"Error collecting K8s metrics for resource {resource.name}: {e}",
+                exc_info=True,
+            )
             return None
 
     def _parse_k8s_metrics(self, metric_pod: Dict[str, Any]) -> Dict[str, Any]:
@@ -367,14 +381,14 @@ class StatsCollector:
             Normalized metrics dictionary
         """
         metrics = {
-            'timestamp': datetime.now().isoformat(),
-            'cpu_percent': 0.0,
-            'memory_bytes': 0,
-            'memory_percent': 0.0,
+            "timestamp": datetime.now().isoformat(),
+            "cpu_percent": 0.0,
+            "memory_bytes": 0,
+            "memory_percent": 0.0,
         }
 
         try:
-            containers = metric_pod.get('containers', [])
+            containers = metric_pod.get("containers", [])
             if not containers:
                 return metrics
 
@@ -383,22 +397,22 @@ class StatsCollector:
             total_memory_bytes = 0
 
             for container in containers:
-                usage = container.get('usage', {})
+                usage = container.get("usage", {})
 
                 # CPU: convert millicores to percentage (assuming 1000m = 100%)
-                cpu_str = usage.get('cpu', '0m')
-                if cpu_str.endswith('m'):
+                cpu_str = usage.get("cpu", "0m")
+                if cpu_str.endswith("m"):
                     total_cpu_m += int(cpu_str[:-1])
-                elif cpu_str.endswith('n'):
+                elif cpu_str.endswith("n"):
                     total_cpu_m += int(cpu_str[:-1]) / 1_000_000
 
                 # Memory: convert to bytes
-                memory_str = usage.get('memory', '0Ki')
+                memory_str = usage.get("memory", "0Ki")
                 total_memory_bytes += self._parse_k8s_quantity(memory_str)
 
             # Convert millicores to percentage (assuming 1000m per core, using single core as base)
-            metrics['cpu_percent'] = min(100.0, (total_cpu_m / 1000.0) * 100)
-            metrics['memory_bytes'] = total_memory_bytes
+            metrics["cpu_percent"] = min(100.0, (total_cpu_m / 1000.0) * 100)
+            metrics["memory_bytes"] = total_memory_bytes
 
         except Exception as e:
             logger.warning(f"Error parsing K8s metrics: {e}")
@@ -418,20 +432,20 @@ class StatsCollector:
             return 0
 
         multipliers = {
-            'Ki': 1024,
-            'Mi': 1024 ** 2,
-            'Gi': 1024 ** 3,
-            'Ti': 1024 ** 4,
-            'k': 1000,
-            'M': 1000 ** 2,
-            'G': 1000 ** 3,
-            'T': 1000 ** 4,
+            "Ki": 1024,
+            "Mi": 1024**2,
+            "Gi": 1024**3,
+            "Ti": 1024**4,
+            "k": 1000,
+            "M": 1000**2,
+            "G": 1000**3,
+            "T": 1000**4,
         }
 
         for suffix, multiplier in multipliers.items():
             if quantity.endswith(suffix):
                 try:
-                    value = float(quantity[:-len(suffix)])
+                    value = float(quantity[: -len(suffix)])
                     return int(value * multiplier)
                 except ValueError:
                     return 0
@@ -465,9 +479,11 @@ class StatsCollector:
                 return None
 
             # Collect stats using connector's method
-            if hasattr(connector, 'collect_stats'):
+            if hasattr(connector, "collect_stats"):
                 connector_stats = connector.collect_stats()
-                return self._normalize_external_metrics(connector_stats, resource_type.name)
+                return self._normalize_external_metrics(
+                    connector_stats, resource_type.name
+                )
             else:
                 logger.warning(
                     f"Connector for {resource_type.name} does not support collect_stats"
@@ -477,7 +493,7 @@ class StatsCollector:
         except Exception as e:
             logger.error(
                 f"Error collecting external metrics for resource {resource.name}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             return None
 
@@ -494,28 +510,41 @@ class StatsCollector:
         try:
             resource_type_name = resource_type.name.lower()
 
-            if resource_type_name == 'postgresql':
-                from apps.manager.lib.resource_connectors.postgresql import PostgreSQLConnector
-                return PostgreSQLConnector(resource.connection_info, resource.credentials)
+            if resource_type_name == "postgresql":
+                from apps.manager.lib.resource_connectors.postgresql import (
+                    PostgreSQLConnector,
+                )
 
-            elif resource_type_name == 'mariadb':
-                from apps.manager.lib.resource_connectors.mariadb import MariaDBConnector
+                return PostgreSQLConnector(
+                    resource.connection_info, resource.credentials
+                )
+
+            elif resource_type_name == "mariadb":
+                from apps.manager.lib.resource_connectors.mariadb import (
+                    MariaDBConnector,
+                )
+
                 return MariaDBConnector(resource.connection_info, resource.credentials)
 
-            elif resource_type_name == 'redis':
+            elif resource_type_name == "redis":
                 from apps.manager.lib.resource_connectors.redis import RedisConnector
+
                 return RedisConnector(resource.connection_info, resource.credentials)
 
-            elif resource_type_name == 'ceph':
+            elif resource_type_name == "ceph":
                 from apps.manager.lib.resource_connectors.ceph import CephConnector
+
                 return CephConnector(resource.connection_info, resource.credentials)
 
-            elif resource_type_name == 'san':
+            elif resource_type_name == "san":
                 from apps.manager.lib.resource_connectors.san import SANConnector
+
                 return SANConnector(resource.connection_info, resource.credentials)
 
             else:
-                logger.warning(f"No connector available for resource type: {resource_type_name}")
+                logger.warning(
+                    f"No connector available for resource type: {resource_type_name}"
+                )
                 return None
 
         except ImportError as e:
@@ -526,9 +555,7 @@ class StatsCollector:
             return None
 
     def _normalize_external_metrics(
-        self,
-        connector_stats: Dict[str, Any],
-        resource_type: str
+        self, connector_stats: Dict[str, Any], resource_type: str
     ) -> Dict[str, Any]:
         """Normalize connector-specific metrics to standard format.
 
@@ -540,40 +567,49 @@ class StatsCollector:
             Normalized metrics dictionary
         """
         metrics = {
-            'timestamp': datetime.now().isoformat(),
-            'resource_type': resource_type,
+            "timestamp": datetime.now().isoformat(),
+            "resource_type": resource_type,
         }
 
         # Database-specific metrics (PostgreSQL, MariaDB)
-        if resource_type.lower() in ['postgresql', 'mariadb', 'mysql']:
-            metrics['connections'] = connector_stats.get('connections', {})
-            metrics['database_size_bytes'] = connector_stats.get('database_size_bytes', 0)
-            metrics['cache_hit_ratio'] = connector_stats.get('cache_hit_ratio', 0.0)
-            metrics['transaction_stats'] = connector_stats.get('transaction_stats', {})
-            metrics['query_performance'] = connector_stats.get('query_performance', {})
+        if resource_type.lower() in ["postgresql", "mariadb", "mysql"]:
+            metrics["connections"] = connector_stats.get("connections", {})
+            metrics["database_size_bytes"] = connector_stats.get(
+                "database_size_bytes", 0
+            )
+            metrics["cache_hit_ratio"] = connector_stats.get("cache_hit_ratio", 0.0)
+            metrics["transaction_stats"] = connector_stats.get("transaction_stats", {})
+            metrics["query_performance"] = connector_stats.get("query_performance", {})
 
         # Redis/Cache-specific metrics
-        elif resource_type.lower() in ['redis', 'valkey']:
-            metrics['used_memory_bytes'] = connector_stats.get('used_memory_bytes', 0)
-            metrics['used_memory_percent'] = connector_stats.get('used_memory_percent', 0.0)
-            metrics['connected_clients'] = connector_stats.get('connected_clients', 0)
-            metrics['cache_hit_ratio'] = connector_stats.get('keyspace_hits', 0) / max(
-                1,
-                connector_stats.get('keyspace_hits', 0) + connector_stats.get('keyspace_misses', 0)
-            ) * 100
+        elif resource_type.lower() in ["redis", "valkey"]:
+            metrics["used_memory_bytes"] = connector_stats.get("used_memory_bytes", 0)
+            metrics["used_memory_percent"] = connector_stats.get(
+                "used_memory_percent", 0.0
+            )
+            metrics["connected_clients"] = connector_stats.get("connected_clients", 0)
+            metrics["cache_hit_ratio"] = (
+                connector_stats.get("keyspace_hits", 0)
+                / max(
+                    1,
+                    connector_stats.get("keyspace_hits", 0)
+                    + connector_stats.get("keyspace_misses", 0),
+                )
+                * 100
+            )
 
         # Storage-specific metrics (Ceph, SAN)
-        elif resource_type.lower() in ['ceph', 'san']:
-            metrics['used_bytes'] = connector_stats.get('used_bytes', 0)
-            metrics['available_bytes'] = connector_stats.get('available_bytes', 0)
-            metrics['total_bytes'] = connector_stats.get('total_bytes', 0)
-            if metrics['total_bytes'] > 0:
-                metrics['disk_usage_percent'] = (
-                    metrics['used_bytes'] / metrics['total_bytes'] * 100
+        elif resource_type.lower() in ["ceph", "san"]:
+            metrics["used_bytes"] = connector_stats.get("used_bytes", 0)
+            metrics["available_bytes"] = connector_stats.get("available_bytes", 0)
+            metrics["total_bytes"] = connector_stats.get("total_bytes", 0)
+            if metrics["total_bytes"] > 0:
+                metrics["disk_usage_percent"] = (
+                    metrics["used_bytes"] / metrics["total_bytes"] * 100
                 )
 
         # Include raw stats for inspection
-        metrics['raw_stats'] = connector_stats
+        metrics["raw_stats"] = connector_stats
 
         return metrics
 
@@ -594,69 +630,68 @@ class StatsCollector:
             Tuple of (risk_level_string, RiskFactors object)
         """
         risk_factors = RiskFactors()
-        risk_level = 'low'
+        risk_level = "low"
 
         # Check disk usage
-        disk_usage = metrics.get('disk_usage_percent')
+        disk_usage = metrics.get("disk_usage_percent")
         if disk_usage is not None:
             risk_factors.disk_usage_percent = disk_usage
             if disk_usage > 95:
-                risk_level = 'critical'
-                risk_factors.factors.append('Disk usage critical (>95%)')
+                risk_level = "critical"
+                risk_factors.factors.append("Disk usage critical (>95%)")
             elif disk_usage > 85:
-                risk_level = 'high' if risk_level == 'low' else risk_level
-                risk_factors.factors.append('Disk usage high (>85%)')
+                risk_level = "high" if risk_level == "low" else risk_level
+                risk_factors.factors.append("Disk usage high (>85%)")
 
         # Check memory usage
-        memory_percent = metrics.get('memory_percent')
+        memory_percent = metrics.get("memory_percent")
         if memory_percent is not None:
             risk_factors.memory_percent = memory_percent
             if memory_percent > 90:
-                if risk_level != 'critical':
-                    risk_level = 'high'
-                risk_factors.factors.append('Memory usage high (>90%)')
+                if risk_level != "critical":
+                    risk_level = "high"
+                risk_factors.factors.append("Memory usage high (>90%)")
             elif memory_percent > 85:
-                if risk_level not in ['critical', 'high']:
-                    risk_level = 'medium'
-                risk_factors.factors.append('Memory usage moderate (>85%)')
+                if risk_level not in ["critical", "high"]:
+                    risk_level = "medium"
+                risk_factors.factors.append("Memory usage moderate (>85%)")
 
         # Check connection saturation (for databases)
         # Support both dict format (connections: {total, active}) and direct metric
         connection_saturation = None
-        connections = metrics.get('connections', {})
+        connections = metrics.get("connections", {})
         if isinstance(connections, dict) and connections:
-            total_conns = connections.get('total', 0)
-            active_conns = connections.get('active', 0)
+            total_conns = connections.get("total", 0)
+            active_conns = connections.get("active", 0)
             if total_conns > 0:
                 connection_saturation = (active_conns / total_conns) * 100
 
         # If we didn't get it from the dict, check for direct connection_saturation metric
         if connection_saturation is None:
-            connection_saturation = metrics.get('connection_saturation')
+            connection_saturation = metrics.get("connection_saturation")
 
         if connection_saturation is not None:
             risk_factors.connection_saturation = connection_saturation
             if connection_saturation > 80:
-                if risk_level not in ['critical', 'high']:
-                    risk_level = 'medium'
-                risk_factors.factors.append(f'Connection saturation high ({connection_saturation:.1f}%)')
+                if risk_level not in ["critical", "high"]:
+                    risk_level = "medium"
+                risk_factors.factors.append(
+                    f"Connection saturation high ({connection_saturation:.1f}%)"
+                )
 
         # Check CPU usage
-        cpu_percent = metrics.get('cpu_percent')
+        cpu_percent = metrics.get("cpu_percent")
         if cpu_percent is not None:
             risk_factors.cpu_percent = cpu_percent
             if cpu_percent > 85:
-                if risk_level not in ['critical', 'high']:
-                    risk_level = 'medium'
-                risk_factors.factors.append(f'CPU usage high ({cpu_percent:.1f}%)')
+                if risk_level not in ["critical", "high"]:
+                    risk_level = "medium"
+                risk_factors.factors.append(f"CPU usage high ({cpu_percent:.1f}%)")
 
         return risk_level, risk_factors
 
     def export_prometheus_metrics(
-        self,
-        resource: Any,
-        metrics: Dict[str, Any],
-        risk_level: str
+        self, resource: Any, metrics: Dict[str, Any], risk_level: str
     ) -> None:
         """Export collected metrics to Prometheus.
 
@@ -673,70 +708,64 @@ class StatsCollector:
 
         try:
             # CPU usage
-            if 'cpu_percent' in metrics:
+            if "cpu_percent" in metrics:
                 RESOURCE_CPU_PERCENT.labels(
-                    resource_id=resource_id,
-                    resource_name=resource_name
-                ).set(metrics['cpu_percent'])
+                    resource_id=resource_id, resource_name=resource_name
+                ).set(metrics["cpu_percent"])
 
             # Memory usage
-            if 'memory_bytes' in metrics:
+            if "memory_bytes" in metrics:
                 RESOURCE_MEMORY_BYTES.labels(
-                    resource_id=resource_id,
-                    resource_name=resource_name
-                ).set(metrics['memory_bytes'])
+                    resource_id=resource_id, resource_name=resource_name
+                ).set(metrics["memory_bytes"])
 
-            if 'memory_percent' in metrics:
+            if "memory_percent" in metrics:
                 RESOURCE_MEMORY_PERCENT.labels(
-                    resource_id=resource_id,
-                    resource_name=resource_name
-                ).set(metrics['memory_percent'])
+                    resource_id=resource_id, resource_name=resource_name
+                ).set(metrics["memory_percent"])
 
             # Disk usage
-            if 'disk_usage_percent' in metrics:
+            if "disk_usage_percent" in metrics:
                 RESOURCE_DISK_USAGE_PERCENT.labels(
-                    resource_id=resource_id,
-                    resource_name=resource_name
-                ).set(metrics['disk_usage_percent'])
+                    resource_id=resource_id, resource_name=resource_name
+                ).set(metrics["disk_usage_percent"])
 
             # Network I/O
-            if 'network_in_bytes' in metrics:
+            if "network_in_bytes" in metrics:
                 RESOURCE_NETWORK_IN_BYTES.labels(
-                    resource_id=resource_id,
-                    resource_name=resource_name
-                ).set(metrics['network_in_bytes'])
+                    resource_id=resource_id, resource_name=resource_name
+                ).set(metrics["network_in_bytes"])
 
-            if 'network_out_bytes' in metrics:
+            if "network_out_bytes" in metrics:
                 RESOURCE_NETWORK_OUT_BYTES.labels(
-                    resource_id=resource_id,
-                    resource_name=resource_name
-                ).set(metrics['network_out_bytes'])
+                    resource_id=resource_id, resource_name=resource_name
+                ).set(metrics["network_out_bytes"])
 
             # Connections
-            connections = metrics.get('connections', {})
+            connections = metrics.get("connections", {})
             if isinstance(connections, dict):
                 for conn_type, count in connections.items():
                     RESOURCE_CONNECTIONS.labels(
                         resource_id=resource_id,
                         resource_name=resource_name,
-                        connection_type=conn_type
+                        connection_type=conn_type,
                     ).set(count)
 
             # Cache hit ratio
-            if 'cache_hit_ratio' in metrics:
+            if "cache_hit_ratio" in metrics:
                 RESOURCE_CACHE_HIT_RATIO.labels(
-                    resource_id=resource_id,
-                    resource_name=resource_name
-                ).set(metrics['cache_hit_ratio'])
+                    resource_id=resource_id, resource_name=resource_name
+                ).set(metrics["cache_hit_ratio"])
 
             # Risk level (convert to numeric: low=0, medium=1, high=2, critical=3)
-            risk_level_map = {'low': 0, 'medium': 1, 'high': 2, 'critical': 3}
+            risk_level_map = {"low": 0, "medium": 1, "high": 2, "critical": 3}
             risk_numeric = risk_level_map.get(risk_level, 0)
             RESOURCE_RISK_LEVEL.labels(
-                resource_id=resource_id,
-                resource_name=resource_name
+                resource_id=resource_id, resource_name=resource_name
             ).set(risk_numeric)
 
         except Exception as e:
-            logger.error(f"Error exporting Prometheus metrics for {resource_name}: {e}",
-                        exc_info=True)
+            logger.error(
+                f"Error exporting Prometheus metrics for {resource_name}: {e}",
+                exc_info=True,
+            )

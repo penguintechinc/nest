@@ -20,7 +20,7 @@ func TestNewServer(t *testing.T) {
 	server := newServer(logger)
 
 	if server == nil {
-		t.Errorf("expected server to be created")
+		t.Fatalf("expected server to be created")
 	}
 
 	if server.Addr != ":8888" {

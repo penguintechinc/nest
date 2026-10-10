@@ -1,19 +1,21 @@
 """Tests for utils/sql_validator.py."""
+
 import os
 import sys
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 def _validate(sql: str):
     from utils.sql_validator import validate_sql_security
+
     return validate_sql_security(sql)
 
 
 # ---------------------------------------------------------------------------
 # Safe SQL
 # ---------------------------------------------------------------------------
+
 
 def test_safe_select():
     r = _validate("SELECT id, name FROM users WHERE id = 42")
@@ -44,6 +46,7 @@ def test_safe_delete_specific():
 # ---------------------------------------------------------------------------
 # Dangerous SQL patterns
 # ---------------------------------------------------------------------------
+
 
 def test_union_select():
     r = _validate("SELECT id FROM users UNION SELECT password FROM admins")
@@ -178,6 +181,7 @@ def test_mass_delete():
 # Shell patterns
 # ---------------------------------------------------------------------------
 
+
 def test_bin_bash():
     r = _validate("SELECT '/bin/bash -c ls'")
     assert r.safe is False
@@ -207,6 +211,7 @@ def test_popen_call():
 # Encoding attack detection
 # ---------------------------------------------------------------------------
 
+
 def test_non_ascii_characters():
     r = _validate("SELECT * FROM users WHERE name = 'héllo'")
     assert r.safe is False
@@ -222,8 +227,10 @@ def test_pure_ascii_is_safe():
 # ValidationResult dataclass
 # ---------------------------------------------------------------------------
 
+
 def test_validation_result_fields():
     from utils.sql_validator import ValidationResult
+
     vr = ValidationResult(safe=True, issues=[])
     assert vr.safe is True
     assert vr.issues == []
@@ -231,6 +238,7 @@ def test_validation_result_fields():
 
 def test_validation_result_with_issues():
     from utils.sql_validator import ValidationResult
+
     vr = ValidationResult(safe=False, issues=["UNION SELECT detected"])
     assert vr.safe is False
     assert len(vr.issues) == 1
@@ -238,6 +246,7 @@ def test_validation_result_with_issues():
 
 def test_validation_result_default_issues():
     from utils.sql_validator import ValidationResult
+
     vr = ValidationResult(safe=True)
     assert vr.issues == []
 
@@ -245,6 +254,7 @@ def test_validation_result_default_issues():
 # ---------------------------------------------------------------------------
 # Case insensitivity
 # ---------------------------------------------------------------------------
+
 
 def test_uppercase_patterns_detected():
     r = _validate("SELECT * FROM USERS UNION SELECT * FROM ADMINS")

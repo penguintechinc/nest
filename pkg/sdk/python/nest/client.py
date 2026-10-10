@@ -1,13 +1,14 @@
 """Nest HTTP client with context manager support."""
+
 from __future__ import annotations
 
-import os
-from typing import Optional, List, Any
-import urllib.request
-import urllib.error
 import json
+import os
+import urllib.error
+import urllib.request
+from typing import Any, List, Optional
 
-from .types import DataResource, DataResourceSpec, Database, DatabaseSpec
+from .types import Database, DatabaseSpec, DataResource, DataResourceSpec
 
 
 class NestClient:
@@ -61,9 +62,7 @@ class DataResourceAPI:
     def list(self, tenant: str) -> List[DataResource]:
         data = self._c._request("GET", f"/api/v1/tenants/{tenant}/dataresources")
         return [
-            DataResource(
-                **{k.replace("class", "class_"): v for k, v in r.items()}
-            )
+            DataResource(**{k.replace("class", "class_"): v for k, v in r.items()})
             for r in data.get("dataresources", [])
         ]
 
@@ -74,7 +73,9 @@ class DataResourceAPI:
             "class": spec.class_,
             "tenant": spec.tenant,
         }
-        self._c._request("POST", f"/api/v1/tenants/{spec.tenant}/dataresources", payload)
+        self._c._request(
+            "POST", f"/api/v1/tenants/{spec.tenant}/dataresources", payload
+        )
         return ""
 
     def delete(self, tenant: str, name: str) -> None:

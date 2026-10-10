@@ -36,10 +36,30 @@ spec:
           spec:
             type: object
             required: [type, class, tenant]
+            x-kubernetes-validations:
+              - message: "spec.type is not valid for spec.category"
+                rule: >-
+                  !has(self.category) ||
+                  (self.category == 'database' && self.type in ['postgres','mariadb','mysql','keyvalue','timeseries','vector','rockfs']) ||
+                  (self.category == 'object' && self.type in ['object']) ||
+                  (self.category == 'volume' && self.type in ['pvc/block','pvc/file','nfs','iscsi','filesystem']) ||
+                  (self.category == 'streaming' && self.type in ['kafka']) ||
+                  (self.category == 'search' && self.type in ['search']) ||
+                  (self.category == 'analytics' && self.type in ['clickhouse','warehouse/trino','lakehouse/iceberg'])
             properties:
               type:
                 type: string
                 description: "Resource type: postgres, object, pvc/block, pvc/file, keyvalue, etc."
+              category:
+                type: string
+                description: "Coarse module this resource belongs to; when set, type must be a member."
+                enum:
+                  - database
+                  - object
+                  - volume
+                  - streaming
+                  - search
+                  - analytics
               class:
                 type: string
                 description: "References a DataResourceClass name"

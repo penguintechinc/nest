@@ -1,4 +1,5 @@
 """Tests for DataResource CRUD handlers."""
+
 import pytest
 
 

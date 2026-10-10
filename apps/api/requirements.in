@@ -24,3 +24,5 @@ asyncpg==0.30.0
 aiosqlite==0.20.0
 aiomysql==0.3.0
 pyasn1==0.6.4
+PyYAML==6.0.3
+posthog==3.7.0

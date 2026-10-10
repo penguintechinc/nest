@@ -19,27 +19,31 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           fetch-depth: 2
+          # Safe to drop: this workflow never uses git to write. It only calls
+          # `gh release create`, which authenticates via the GH_TOKEN env var,
+          # not the credential actions/checkout stores in .git/config.
+          persist-credentials: false
 
       - name: Check if .version file exists
         id: check_version
         run: |
           if [ ! -f .version ]; then
             echo "0.0.0" > .version
-            echo "version=0.0.0" >> $GITHUB_OUTPUT
-            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "version=0.0.0" >> "$GITHUB_OUTPUT"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
           else
-            VERSION=$(cat .version | tr -d '[:space:]')
+            VERSION=$(tr -d '[:space:]' < .version)
             # Extract semantic version (strip build timestamp if present)
             SEMVER=$(echo "$VERSION" | cut -d'.' -f1-3)
-            echo "version=$SEMVER" >> $GITHUB_OUTPUT
-            echo "full_version=$VERSION" >> $GITHUB_OUTPUT
+            echo "version=$SEMVER" >> "$GITHUB_OUTPUT"
+            echo "full_version=$VERSION" >> "$GITHUB_OUTPUT"
 
             # Check if version is default
             if [ "$SEMVER" = "0.0.0" ]; then
-              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
               echo "Version is default (0.0.0), skipping release"
             else
-              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
               echo "Version is $SEMVER, proceeding with release"
             fi
           fi
@@ -49,23 +53,25 @@ jobs:
         if: steps.check_version.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.check_version.outputs.version }}
         run: |
-          VERSION="${{ steps.check_version.outputs.version }}"
           if gh release view "v$VERSION" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release v$VERSION already exists"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "Release v$VERSION does not exist, will create"
           fi
 
       - name: Generate release notes
         id: release_notes
         if: steps.check_version.outputs.should_release == 'true' && steps.check_release.outputs.exists != 'true'
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          VERSION: ${{ steps.check_version.outputs.version }}
+          FULL_VERSION: ${{ steps.check_version.outputs.full_version }}
         run: |
-          VERSION="${{ steps.check_version.outputs.version }}"
-          FULL_VERSION="${{ steps.check_version.outputs.full_version }}"
-
           # Create release notes
           cat << EOF > release_notes.md
           ## Pre-Release v$VERSION
@@ -75,8 +81,8 @@ jobs:
           **Version Details:**
           - Semantic Version: \`$VERSION\`
           - Full Version: \`$FULL_VERSION\`
-          - Commit: \`${{ github.sha }}\`
-          - Branch: \`${{ github.ref_name }}\`
+          - Commit: \`$COMMIT_SHA\`
+          - Branch: \`$BRANCH_NAME\`
 
           ### Changes
 
@@ -90,21 +96,25 @@ jobs:
         if: steps.check_version.outputs.should_release == 'true' && steps.check_release.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+          VERSION: ${{ steps.check_version.outputs.version }}
         run: |
-          VERSION="${{ steps.check_version.outputs.version }}"
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --notes-file release_notes.md \
             --prerelease \
-            --target ${{ github.sha }}
+            --target "$COMMIT_SHA"
 
           echo "✅ Created pre-release v$VERSION"
 
       - name: Skip release (version is default or release exists)
         if: steps.check_version.outputs.should_release != 'true' || steps.check_release.outputs.exists == 'true'
+        env:
+          SHOULD_RELEASE: ${{ steps.check_version.outputs.should_release }}
+          VERSION: ${{ steps.check_version.outputs.version }}
         run: |
-          if [ "${{ steps.check_version.outputs.should_release }}" != "true" ]; then
+          if [ "$SHOULD_RELEASE" != "true" ]; then
             echo "⏭️ Skipping release - version is 0.0.0 (default)"
           else
-            echo "⏭️ Skipping release - v${{ steps.check_version.outputs.version }} already exists"
+            echo "⏭️ Skipping release - v$VERSION already exists"
           fi

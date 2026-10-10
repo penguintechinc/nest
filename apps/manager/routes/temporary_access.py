@@ -1,11 +1,12 @@
 """Temporary access token management routes."""
+
 import asyncio
 import logging
 import secrets
-from datetime import datetime, timezone, timedelta
-from quart import Blueprint, jsonify, request, g
+from datetime import datetime, timedelta, timezone
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ _DEFAULT_TTL_HOURS = 24
 @require_role("admin")
 async def list_temp_tokens():
     """List all temporary access tokens."""
+
     def _query():
         db = get_db()
         rows = db(db.temporary_access_token.id > 0).select(
@@ -46,7 +48,6 @@ async def create_temp_token():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
@@ -69,6 +70,7 @@ async def create_temp_token():
 @require_auth
 async def get_temp_token(token_id: int):
     """Get temporary access token details."""
+
     def _query():
         db = get_db()
         row = db.temporary_access_token[token_id]
@@ -84,6 +86,7 @@ async def get_temp_token(token_id: int):
 @require_role("admin")
 async def delete_temp_token(token_id: int):
     """Delete a temporary access token."""
+
     def _delete():
         db = get_db()
         row = db.temporary_access_token[token_id]
@@ -103,6 +106,7 @@ async def delete_temp_token(token_id: int):
 @require_role("admin")
 async def revoke_temp_token(token_id: int):
     """Revoke a temporary access token by setting used_at to now."""
+
     def _revoke():
         db = get_db()
         row = db.temporary_access_token[token_id]

@@ -1,4 +1,5 @@
 """Tenant middleware for authentication."""
+
 import json
 import logging
 import os
@@ -11,7 +12,7 @@ from typing import Optional
 import jwt
 import requests
 from quart import g, request
-from werkzeug.exceptions import Unauthorized, Forbidden
+from werkzeug.exceptions import Forbidden, Unauthorized
 
 log = logging.getLogger(__name__)
 

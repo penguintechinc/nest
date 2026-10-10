@@ -1,9 +1,10 @@
 """Threat intelligence feed and indicator routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -15,15 +16,15 @@ threat_intel_bp = Blueprint("threat_intel_bp", __name__, url_prefix="/api/v1")
 # Feeds
 # ---------------------------------------------------------------------------
 
+
 @threat_intel_bp.route("/threat-intel/feeds", methods=["GET"])
 @require_auth
 async def list_feeds():
     """List all threat intelligence feeds."""
+
     def _query():
         db = get_db()
-        rows = db(db.threat_intel_feed.id > 0).select(
-            orderby=db.threat_intel_feed.name
-        )
+        rows = db(db.threat_intel_feed.id > 0).select(orderby=db.threat_intel_feed.name)
         return [r.as_dict() for r in rows]
 
     feeds = await asyncio.to_thread(_query)
@@ -44,7 +45,6 @@ async def create_feed():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         feed_id = db.threat_intel_feed.insert(
             name=body["name"],
@@ -65,6 +65,7 @@ async def create_feed():
 @require_auth
 async def get_feed(feed_id: int):
     """Get a single threat intel feed."""
+
     def _query():
         db = get_db()
         row = db.threat_intel_feed[feed_id]
@@ -85,7 +86,6 @@ async def update_feed(feed_id: int):
         return jsonify({"error": "Request body required"}), 400
 
     def _update():
-
         db = get_db()
         row = db.threat_intel_feed[feed_id]
         if not row:
@@ -107,6 +107,7 @@ async def update_feed(feed_id: int):
 @require_role("admin")
 async def delete_feed(feed_id: int):
     """Delete a threat intel feed."""
+
     def _delete():
         db = get_db()
         row = db.threat_intel_feed[feed_id]
@@ -126,6 +127,7 @@ async def delete_feed(feed_id: int):
 @require_role("admin")
 async def poll_feed(feed_id: int):
     """Trigger an immediate poll of a threat intel feed."""
+
     def _check_and_mark():
         db = get_db()
         row = db.threat_intel_feed[feed_id]
@@ -145,6 +147,7 @@ async def poll_feed(feed_id: int):
 # Indicators
 # ---------------------------------------------------------------------------
 
+
 @threat_intel_bp.route("/threat-intel/indicators", methods=["GET"])
 @require_auth
 async def list_indicators():
@@ -153,7 +156,6 @@ async def list_indicators():
     feed_id = request.args.get("feed_id", type=int)
 
     def _query():
-
         db = get_db()
         query = db.threat_indicator.id > 0
         if indicator_type:
@@ -174,6 +176,7 @@ async def list_indicators():
 # Matches
 # ---------------------------------------------------------------------------
 
+
 @threat_intel_bp.route("/threat-intel/matches", methods=["GET"])
 @require_auth
 async def list_matches():
@@ -181,7 +184,6 @@ async def list_matches():
     server_id = request.args.get("server_id", type=int)
 
     def _query():
-
         db = get_db()
         query = db.threat_match.id > 0
         if server_id is not None:

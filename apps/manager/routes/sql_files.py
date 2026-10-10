@@ -1,11 +1,12 @@
 """SQL file management routes."""
+
 import asyncio
 import hashlib
 import logging
 from concurrent.futures import ProcessPoolExecutor
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -18,11 +19,10 @@ from quart import current_app
 
 
 def _validate_sql_security(content: str) -> dict:
-
-
     db = get_db()
     """CPU-bound SQL security validation — runs in a separate process."""
     from utils.sql_validator import validate_sql_security  # type: ignore
+
     return validate_sql_security(content)
 
 
@@ -30,6 +30,7 @@ def _validate_sql_security(content: str) -> dict:
 @require_auth
 async def list_sql_files():
     """List all SQL files."""
+
     def _query():
         db = get_db()
         rows = db(db.sql_file.id > 0).select(
@@ -67,7 +68,6 @@ async def upload_sql_file():
     file_size = len(content.encode())
 
     def _insert():
-
         db = get_db()
         file_id = db.sql_file.insert(
             filename=filename,
@@ -91,6 +91,7 @@ async def upload_sql_file():
 @require_auth
 async def get_sql_file(file_id: int):
     """Get SQL file metadata and content."""
+
     def _query():
         db = get_db()
         row = db.sql_file[file_id]
@@ -106,6 +107,7 @@ async def get_sql_file(file_id: int):
 @require_role("admin")
 async def delete_sql_file(file_id: int):
     """Delete a SQL file."""
+
     def _delete():
         db = get_db()
         row = db.sql_file[file_id]
@@ -125,6 +127,7 @@ async def delete_sql_file(file_id: int):
 @require_auth
 async def validate_sql_file(file_id: int):
     """Validate SQL file security using a subprocess pool."""
+
     def _get_content():
         db = get_db()
         row = db.sql_file[file_id]
@@ -147,9 +150,10 @@ async def validate_sql_file(file_id: int):
     is_valid = result.get("valid", False)
 
     def _store_result():
-
         db = get_db()
-        db(db.sql_file.id == file_id).update(is_valid=is_valid, validation_result=str(result))
+        db(db.sql_file.id == file_id).update(
+            is_valid=is_valid, validation_result=str(result)
+        )
         db.commit()
 
     await asyncio.to_thread(_store_result)

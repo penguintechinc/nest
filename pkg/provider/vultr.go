@@ -70,7 +70,7 @@ func (p *VultrStorageProvisioner) ProvisionObjectBucket(ctx context.Context, cfg
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Vultr create bucket returned %d: %s", resp.StatusCode, b)
+		return nil, fmt.Errorf("vultr create bucket returned %d: %s", resp.StatusCode, b)
 	}
 
 	return &ObjectBucketInfo{
@@ -149,14 +149,14 @@ func (p *VultrStorageProvisioner) ProvisionBlockVolume(ctx context.Context, cfg 
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Vultr blocks API: %w", err)
+		return nil, fmt.Errorf("vultr blocks API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Accept 200, 201, and 202 (Accepted for async operations)
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Vultr blocks create returned %d: %s", resp.StatusCode, rb)
+		return nil, fmt.Errorf("vultr blocks create returned %d: %s", resp.StatusCode, rb)
 	}
 
 	var result struct {
@@ -195,7 +195,7 @@ func (p *VultrStorageProvisioner) DeprovisionBlockVolume(ctx context.Context, cf
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Vultr blocks delete: %w", err)
+		return fmt.Errorf("vultr blocks delete: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -205,7 +205,7 @@ func (p *VultrStorageProvisioner) DeprovisionBlockVolume(ctx context.Context, cf
 	}
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Vultr blocks delete returned %d: %s", resp.StatusCode, b)
+		return fmt.Errorf("vultr blocks delete returned %d: %s", resp.StatusCode, b)
 	}
 	return nil
 }
@@ -225,13 +225,13 @@ func (p *VultrStorageProvisioner) GetBlockVolumeStatus(ctx context.Context, cfg 
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Vultr blocks get: %w", err)
+		return nil, fmt.Errorf("vultr blocks get: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Vultr blocks get returned %d: %s", resp.StatusCode, b)
+		return nil, fmt.Errorf("vultr blocks get returned %d: %s", resp.StatusCode, b)
 	}
 
 	var result struct {

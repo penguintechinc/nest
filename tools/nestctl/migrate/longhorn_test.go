@@ -317,7 +317,7 @@ func TestExecuteMigration_DryRun(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if result == nil {
-		t.Errorf("expected result")
+		t.Fatalf("expected result")
 	}
 	// DryRun should not create any files
 	if len(result.Created) != 0 {

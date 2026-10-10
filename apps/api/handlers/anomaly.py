@@ -1,12 +1,13 @@
 """Anomaly handler — proxies to nest-anomaly-detector service (enterprise/WaddleAI gated)."""
+
 import os
 import uuid
 from typing import Any
 
 import aiohttp
-from quart import jsonify, request, g
-from werkzeug.exceptions import Forbidden
 from middleware import get_tenant
+from quart import g, jsonify, request
+from werkzeug.exceptions import Forbidden
 
 # NOTE: The anomaly-detector currently exposes gRPC on :50061 only; the HTTP mux
 # exists in mux.go but is not yet wired to a listener. Until that is fixed, this

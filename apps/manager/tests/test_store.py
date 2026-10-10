@@ -3,7 +3,6 @@
 from datetime import datetime, timezone
 
 import pytest
-
 from models import OperationRecord
 from store.store import MemoryOperationStore
 

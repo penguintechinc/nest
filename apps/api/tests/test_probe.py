@@ -1,9 +1,9 @@
 """Tests for TCP probe utilities."""
+
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from handlers.probe import extract_host_port, tcp_ping
 
 
@@ -177,7 +177,6 @@ class TestTcpPing:
     @pytest.mark.asyncio
     async def test_latency_measurement_success(self):
         """Test latency measurement on successful connection."""
-        import time
 
         with patch("asyncio.open_connection") as mock_open:
             mock_open.return_value = (AsyncMock(), AsyncMock())
@@ -186,9 +185,7 @@ class TestTcpPing:
                 # Simulate 50ms latency
                 mock_time.side_effect = [0.0, 0.05]
 
-                reachable, latency_ms, message = await tcp_ping(
-                    "localhost", 5432
-                )
+                reachable, latency_ms, message = await tcp_ping("localhost", 5432)
 
                 assert reachable is True
                 assert latency_ms == 50
@@ -204,9 +201,7 @@ class TestTcpPing:
                 # Simulate 25ms latency before error
                 mock_time.side_effect = [0.0, 0.025]
 
-                reachable, latency_ms, message = await tcp_ping(
-                    "localhost", 5432
-                )
+                reachable, latency_ms, message = await tcp_ping("localhost", 5432)
 
                 assert reachable is False
                 assert latency_ms == 25

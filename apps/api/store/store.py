@@ -1,14 +1,15 @@
 """In-memory store for DataResources and Operations."""
+
 import asyncio
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from models import (
+    DataProtectionPolicyRecord,
     DataResourceRecord,
     OperationRecord,
-    VolumeSnapshotRecord,
-    DataProtectionPolicyRecord,
     SearchPoolRecord,
+    VolumeSnapshotRecord,
 )
 
 
@@ -16,9 +17,7 @@ class Store(ABC):
     """Data access interface for the API server."""
 
     @abstractmethod
-    async def list_data_resources(
-        self, tenant: str
-    ) -> list[DataResourceRecord]:
+    async def list_data_resources(self, tenant: str) -> list[DataResourceRecord]:
         """List all DataResources for a tenant."""
         pass
 
@@ -160,14 +159,10 @@ class MemoryStore(Store):
         """Generate a key for tenant/op_id."""
         return f"{tenant}/{op_id}"
 
-    async def list_data_resources(
-        self, tenant: str
-    ) -> list[DataResourceRecord]:
+    async def list_data_resources(self, tenant: str) -> list[DataResourceRecord]:
         """List all DataResources for a tenant."""
         async with self._lock:
-            return [
-                dr for dr in self._resources.values() if dr.tenant == tenant
-            ]
+            return [dr for dr in self._resources.values() if dr.tenant == tenant]
 
     async def create_data_resource(self, dr: DataResourceRecord) -> None:
         """Create a new DataResource."""
@@ -245,16 +240,12 @@ class MemoryStore(Store):
     async def list_operations(self, tenant: str) -> list[OperationRecord]:
         """List all operations for a tenant."""
         async with self._lock:
-            return [
-                op for op in self._operations.values() if op.tenant == tenant
-            ]
+            return [op for op in self._operations.values() if op.tenant == tenant]
 
     async def list_snapshots(self, tenant: str) -> list[VolumeSnapshotRecord]:
         """List all VolumeSnapshots for a tenant."""
         async with self._lock:
-            return [
-                s for s in self._snapshots.values() if s.tenant == tenant
-            ]
+            return [s for s in self._snapshots.values() if s.tenant == tenant]
 
     async def create_snapshot(
         self, tenant: str, name: str, source_pvc: str, snapshot_class: str
@@ -288,9 +279,7 @@ class MemoryStore(Store):
     ) -> list[DataProtectionPolicyRecord]:
         """List all DataProtectionPolicy CRs for a tenant."""
         async with self._lock:
-            return [
-                p for p in self._policies.values() if p.tenant == tenant
-            ]
+            return [p for p in self._policies.values() if p.tenant == tenant]
 
     async def create_protection_policy(
         self,

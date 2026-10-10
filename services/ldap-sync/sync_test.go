@@ -391,7 +391,7 @@ func TestListUsersReturnsIndependentList(t *testing.T) {
 	originalLen := len(list1)
 
 	// Modify returned list
-	list1 = append(list1, &User{UID: "fake"})
+	_ = append(list1, &User{UID: "fake"})
 
 	// Original should be unchanged
 	list2 := syncer.ListUsers("default")

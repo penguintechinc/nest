@@ -308,7 +308,7 @@ func TestCacheKeySessionPattern(t *testing.T) {
 	}{
 		{"simple", "sess123", "session:sess123"},
 		{"uuid", "550e8400-e29b-41d4-a716-446655440000", "session:550e8400-e29b-41d4-a716-446655440000"},
-		{"long token", "abc123def456ghi789", "session:abc123def456ghi789"},
+		{"long token", "not-a-real-session-token", "session:not-a-real-session-token"},
 	}
 
 	for _, tt := range tests {

@@ -17,9 +17,8 @@ import asyncio
 import logging
 from typing import Any
 
-from quart import Blueprint, g, jsonify, request
-
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -34,8 +33,6 @@ VALID_MEMBER_ROLES = {"team_admin", "team_maintainer", "team_viewer"}
 
 
 def _team_to_dict(team: Any, members: list | None = None) -> dict:
-
-
     db = get_db()
     """Serialize a PyDAL team Row."""
     result: dict = {
@@ -52,8 +49,6 @@ def _team_to_dict(team: Any, members: list | None = None) -> dict:
 
 
 def _member_to_dict(membership: Any) -> dict:
-
-
     db = get_db()
     """Serialize a team_memberships row (with joined user data)."""
     return {
@@ -65,40 +60,43 @@ def _member_to_dict(membership: Any) -> dict:
 
 
 def _is_global_admin() -> bool:
-
-
     db = get_db()
     return getattr(g, "user_role", "viewer") == "admin"
 
 
 def _user_is_member(team_id: int, user_id: int) -> bool:
-
-
     db = get_db()
     """Synchronous helper — call inside asyncio.to_thread."""
-    row = db(
-        (db.team_memberships.team_id == team_id)
-        & (db.team_memberships.user_id == user_id)
-    ).select(limitby=(0, 1)).first()
+    row = (
+        db(
+            (db.team_memberships.team_id == team_id)
+            & (db.team_memberships.user_id == user_id)
+        )
+        .select(limitby=(0, 1))
+        .first()
+    )
     return row is not None
 
 
 def _user_is_team_admin(team_id: int, user_id: int) -> bool:
-
-
     db = get_db()
     """Synchronous helper — call inside asyncio.to_thread."""
-    row = db(
-        (db.team_memberships.team_id == team_id)
-        & (db.team_memberships.user_id == user_id)
-        & (db.team_memberships.role == "team_admin")
-    ).select(limitby=(0, 1)).first()
+    row = (
+        db(
+            (db.team_memberships.team_id == team_id)
+            & (db.team_memberships.user_id == user_id)
+            & (db.team_memberships.role == "team_admin")
+        )
+        .select(limitby=(0, 1))
+        .first()
+    )
     return row is not None
 
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/teams
 # ---------------------------------------------------------------------------
+
 
 @teams_bp.route("/teams", methods=["GET"])
 @require_auth
@@ -107,7 +105,6 @@ async def list_teams() -> tuple:
     current_user_id: int = g.user_id
 
     def _do_list() -> list:
-
         db = get_db()
         base_query = db.teams.deleted_at == None  # noqa: E711
 
@@ -131,35 +128,50 @@ async def list_teams() -> tuple:
 # POST /api/v1/teams
 # ---------------------------------------------------------------------------
 
+
 @teams_bp.route("/teams", methods=["POST"])
 @require_role("admin")
 async def create_team() -> tuple:
     """Create a new team.  Requires admin role."""
     body = await request.get_json(silent=True)
     if not body:
-        return jsonify({"error": "invalid_request", "message": "request body required"}), 400
+        return (
+            jsonify({"error": "invalid_request", "message": "request body required"}),
+            400,
+        )
 
     name: str = (body.get("name") or "").strip()
     description: str = (body.get("description") or "").strip()
 
     if not name or len(name) > 255:
-        return jsonify({
-            "error": "invalid_request",
-            "message": "name is required and must be ≤255 characters",
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": "invalid_request",
+                    "message": "name is required and must be ≤255 characters",
+                }
+            ),
+            400,
+        )
 
     if len(description) > 1000:
-        return jsonify({
-            "error": "invalid_request",
-            "message": "description must be ≤1000 characters",
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": "invalid_request",
+                    "message": "description must be ≤1000 characters",
+                }
+            ),
+            400,
+        )
 
     def _do_create() -> dict:
-
         db = get_db()
-        existing = db(
-            (db.teams.name == name) & (db.teams.deleted_at == None)  # noqa: E711
-        ).select(limitby=(0, 1)).first()
+        existing = (
+            db((db.teams.name == name) & (db.teams.deleted_at == None))  # noqa: E711
+            .select(limitby=(0, 1))
+            .first()
+        )
         if existing is not None:
             return {"conflict": True}
 
@@ -171,15 +183,24 @@ async def create_team() -> tuple:
     result = await asyncio.to_thread(_do_create)
 
     if result.get("conflict"):
-        return jsonify({"error": "duplicate_name", "message": "Team name already exists"}), 409
+        return (
+            jsonify({"error": "duplicate_name", "message": "Team name already exists"}),
+            409,
+        )
 
-    logger.info("Team created: id=%d name=%s by user id=%d", int(result["team"].id), name, g.user_id)
+    logger.info(
+        "Team created: id=%d name=%s by user id=%d",
+        int(result["team"].id),
+        name,
+        g.user_id,
+    )
     return jsonify(_team_to_dict(result["team"])), 201
 
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/teams/<team_id>
 # ---------------------------------------------------------------------------
+
 
 @teams_bp.route("/teams/<int:team_id>", methods=["GET"])
 @require_auth
@@ -188,11 +209,12 @@ async def get_team(team_id: int) -> tuple:
     current_user_id: int = g.user_id
 
     def _do_get() -> dict | None:
-
         db = get_db()
-        team = db(
-            (db.teams.id == team_id) & (db.teams.deleted_at == None)  # noqa: E711
-        ).select(limitby=(0, 1)).first()
+        team = (
+            db((db.teams.id == team_id) & (db.teams.deleted_at == None))  # noqa: E711
+            .select(limitby=(0, 1))
+            .first()
+        )
         if team is None:
             return None
 
@@ -214,7 +236,10 @@ async def get_team(team_id: int) -> tuple:
     if result is None:
         return jsonify({"error": "not_found", "message": "Team not found"}), 404
     if result.get("forbidden"):
-        return jsonify({"error": "insufficient_permissions", "message": "Access denied"}), 403
+        return (
+            jsonify({"error": "insufficient_permissions", "message": "Access denied"}),
+            403,
+        )
 
     return jsonify(result["team"]), 200
 
@@ -222,6 +247,7 @@ async def get_team(team_id: int) -> tuple:
 # ---------------------------------------------------------------------------
 # PUT /api/v1/teams/<team_id>
 # ---------------------------------------------------------------------------
+
 
 @teams_bp.route("/teams/<int:team_id>", methods=["PUT"])
 @require_role("maintainer")
@@ -231,29 +257,43 @@ async def update_team(team_id: int) -> tuple:
 
     body = await request.get_json(silent=True)
     if not body:
-        return jsonify({"error": "invalid_request", "message": "request body required"}), 400
+        return (
+            jsonify({"error": "invalid_request", "message": "request body required"}),
+            400,
+        )
 
     name: str = (body.get("name") or "").strip()
     description: str = (body.get("description") or "").strip()
 
     if not name or len(name) > 255:
-        return jsonify({
-            "error": "invalid_request",
-            "message": "name is required and must be ≤255 characters",
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": "invalid_request",
+                    "message": "name is required and must be ≤255 characters",
+                }
+            ),
+            400,
+        )
 
     if len(description) > 1000:
-        return jsonify({
-            "error": "invalid_request",
-            "message": "description must be ≤1000 characters",
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": "invalid_request",
+                    "message": "description must be ≤1000 characters",
+                }
+            ),
+            400,
+        )
 
     def _do_update() -> dict:
-
         db = get_db()
-        team = db(
-            (db.teams.id == team_id) & (db.teams.deleted_at == None)  # noqa: E711
-        ).select(limitby=(0, 1)).first()
+        team = (
+            db((db.teams.id == team_id) & (db.teams.deleted_at == None))  # noqa: E711
+            .select(limitby=(0, 1))
+            .first()
+        )
         if team is None:
             return {"not_found": True}
 
@@ -263,11 +303,15 @@ async def update_team(team_id: int) -> tuple:
 
         # Check name uniqueness (excluding current team).
         if name != team.name:
-            duplicate = db(
-                (db.teams.name == name)
-                & (db.teams.id != team_id)
-                & (db.teams.deleted_at == None)  # noqa: E711
-            ).select(limitby=(0, 1)).first()
+            duplicate = (
+                db(
+                    (db.teams.name == name)
+                    & (db.teams.id != team_id)
+                    & (db.teams.deleted_at == None)  # noqa: E711
+                )
+                .select(limitby=(0, 1))
+                .first()
+            )
             if duplicate is not None:
                 return {"conflict": True}
 
@@ -281,9 +325,15 @@ async def update_team(team_id: int) -> tuple:
     if result.get("not_found"):
         return jsonify({"error": "not_found", "message": "Team not found"}), 404
     if result.get("forbidden"):
-        return jsonify({"error": "insufficient_permissions", "message": "Access denied"}), 403
+        return (
+            jsonify({"error": "insufficient_permissions", "message": "Access denied"}),
+            403,
+        )
     if result.get("conflict"):
-        return jsonify({"error": "duplicate_name", "message": "Team name already exists"}), 409
+        return (
+            jsonify({"error": "duplicate_name", "message": "Team name already exists"}),
+            409,
+        )
 
     logger.info("Team updated: id=%d name=%s by user id=%d", team_id, name, g.user_id)
     return jsonify(_team_to_dict(result["team"])), 200
@@ -293,6 +343,7 @@ async def update_team(team_id: int) -> tuple:
 # DELETE /api/v1/teams/<team_id>
 # ---------------------------------------------------------------------------
 
+
 @teams_bp.route("/teams/<int:team_id>", methods=["DELETE"])
 @require_role("admin")
 async def delete_team(team_id: int) -> tuple:
@@ -300,11 +351,12 @@ async def delete_team(team_id: int) -> tuple:
     Global teams cannot be deleted."""
 
     def _do_delete() -> dict:
-
         db = get_db()
-        team = db(
-            (db.teams.id == team_id) & (db.teams.deleted_at == None)  # noqa: E711
-        ).select(limitby=(0, 1)).first()
+        team = (
+            db((db.teams.id == team_id) & (db.teams.deleted_at == None))  # noqa: E711
+            .select(limitby=(0, 1))
+            .first()
+        )
         if team is None:
             return {"not_found": True}
 
@@ -312,6 +364,7 @@ async def delete_team(team_id: int) -> tuple:
             return {"global": True}
 
         from datetime import datetime, timezone
+
         db(db.teams.id == team_id).update(deleted_at=datetime.now(timezone.utc))
         db.commit()
         return {"ok": True}
@@ -321,7 +374,15 @@ async def delete_team(team_id: int) -> tuple:
     if result.get("not_found"):
         return jsonify({"error": "not_found", "message": "Team not found"}), 404
     if result.get("global"):
-        return jsonify({"error": "cannot_delete_global", "message": "Cannot delete the global team"}), 400
+        return (
+            jsonify(
+                {
+                    "error": "cannot_delete_global",
+                    "message": "Cannot delete the global team",
+                }
+            ),
+            400,
+        )
 
     logger.info("Team deleted: id=%d by user id=%d", team_id, g.user_id)
     return jsonify({"message": "Team deleted successfully"}), 200
@@ -331,6 +392,7 @@ async def delete_team(team_id: int) -> tuple:
 # GET /api/v1/teams/<team_id>/members
 # ---------------------------------------------------------------------------
 
+
 @teams_bp.route("/teams/<int:team_id>/members", methods=["GET"])
 @require_auth
 async def list_team_members(team_id: int) -> tuple:
@@ -338,11 +400,12 @@ async def list_team_members(team_id: int) -> tuple:
     current_user_id: int = g.user_id
 
     def _do_list() -> dict:
-
         db = get_db()
-        team = db(
-            (db.teams.id == team_id) & (db.teams.deleted_at == None)  # noqa: E711
-        ).select(limitby=(0, 1)).first()
+        team = (
+            db((db.teams.id == team_id) & (db.teams.deleted_at == None))  # noqa: E711
+            .select(limitby=(0, 1))
+            .first()
+        )
         if team is None:
             return {"not_found": True}
 
@@ -364,7 +427,10 @@ async def list_team_members(team_id: int) -> tuple:
     if result.get("not_found"):
         return jsonify({"error": "not_found", "message": "Team not found"}), 404
     if result.get("forbidden"):
-        return jsonify({"error": "insufficient_permissions", "message": "Access denied"}), 403
+        return (
+            jsonify({"error": "insufficient_permissions", "message": "Access denied"}),
+            403,
+        )
 
     members = result["members"]
     return jsonify({"members": members, "count": len(members)}), 200
@@ -373,6 +439,7 @@ async def list_team_members(team_id: int) -> tuple:
 # ---------------------------------------------------------------------------
 # POST /api/v1/teams/<team_id>/members
 # ---------------------------------------------------------------------------
+
 
 @teams_bp.route("/teams/<int:team_id>/members", methods=["POST"])
 @require_role("admin")
@@ -383,30 +450,47 @@ async def add_team_member(team_id: int) -> tuple:
     """
     body = await request.get_json(silent=True)
     if not body:
-        return jsonify({"error": "invalid_request", "message": "request body required"}), 400
+        return (
+            jsonify({"error": "invalid_request", "message": "request body required"}),
+            400,
+        )
 
     try:
         user_id = int(body.get("user_id", 0))
     except (TypeError, ValueError):
-        return jsonify({"error": "invalid_request", "message": "user_id must be an integer"}), 400
+        return (
+            jsonify(
+                {"error": "invalid_request", "message": "user_id must be an integer"}
+            ),
+            400,
+        )
 
     role: str = (body.get("role") or "").strip()
 
     if not user_id:
-        return jsonify({"error": "invalid_request", "message": "user_id is required"}), 400
+        return (
+            jsonify({"error": "invalid_request", "message": "user_id is required"}),
+            400,
+        )
 
     if role not in VALID_MEMBER_ROLES:
-        return jsonify({
-            "error": "invalid_request",
-            "message": f"role must be one of {sorted(VALID_MEMBER_ROLES)}",
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": "invalid_request",
+                    "message": f"role must be one of {sorted(VALID_MEMBER_ROLES)}",
+                }
+            ),
+            400,
+        )
 
     def _do_add() -> dict:
-
         db = get_db()
-        team = db(
-            (db.teams.id == team_id) & (db.teams.deleted_at == None)  # noqa: E711
-        ).select(limitby=(0, 1)).first()
+        team = (
+            db((db.teams.id == team_id) & (db.teams.deleted_at == None))  # noqa: E711
+            .select(limitby=(0, 1))
+            .first()
+        )
         if team is None:
             return {"team_not_found": True}
 
@@ -414,26 +498,34 @@ async def add_team_member(team_id: int) -> tuple:
         if user is None:
             return {"user_not_found": True}
 
-        existing = db(
-            (db.team_memberships.team_id == team_id)
-            & (db.team_memberships.user_id == user_id)
-        ).select(limitby=(0, 1)).first()
+        existing = (
+            db(
+                (db.team_memberships.team_id == team_id)
+                & (db.team_memberships.user_id == user_id)
+            )
+            .select(limitby=(0, 1))
+            .first()
+        )
         if existing is not None:
             return {"already_member": True}
 
         db.team_memberships.insert(team_id=team_id, user_id=user_id, role=role)
         db.commit()
 
-        membership = db(
-            (db.team_memberships.team_id == team_id)
-            & (db.team_memberships.user_id == user_id)
-        ).select(
-            db.team_memberships.ALL,
-            db.users.id,
-            db.users.username,
-            db.users.email,
-            left=db.users.on(db.team_memberships.user_id == db.users.id),
-        ).first()
+        membership = (
+            db(
+                (db.team_memberships.team_id == team_id)
+                & (db.team_memberships.user_id == user_id)
+            )
+            .select(
+                db.team_memberships.ALL,
+                db.users.id,
+                db.users.username,
+                db.users.email,
+                left=db.users.on(db.team_memberships.user_id == db.users.id),
+            )
+            .first()
+        )
         return {"membership": membership}
 
     result = await asyncio.to_thread(_do_add)
@@ -443,9 +535,23 @@ async def add_team_member(team_id: int) -> tuple:
     if result.get("user_not_found"):
         return jsonify({"error": "not_found", "message": "User not found"}), 404
     if result.get("already_member"):
-        return jsonify({"error": "already_member", "message": "User is already a member of this team"}), 409
+        return (
+            jsonify(
+                {
+                    "error": "already_member",
+                    "message": "User is already a member of this team",
+                }
+            ),
+            409,
+        )
 
-    logger.info("Member added: user_id=%d team_id=%d role=%s by user id=%d", user_id, team_id, role, g.user_id)
+    logger.info(
+        "Member added: user_id=%d team_id=%d role=%s by user id=%d",
+        user_id,
+        team_id,
+        role,
+        g.user_id,
+    )
     return jsonify(_member_to_dict(result["membership"])), 201
 
 
@@ -453,24 +559,30 @@ async def add_team_member(team_id: int) -> tuple:
 # DELETE /api/v1/teams/<team_id>/members/<user_id>
 # ---------------------------------------------------------------------------
 
+
 @teams_bp.route("/teams/<int:team_id>/members/<int:user_id>", methods=["DELETE"])
 @require_role("admin")
 async def remove_team_member(team_id: int, user_id: int) -> tuple:
     """Remove a user from a team.  Requires admin role."""
 
     def _do_remove() -> dict:
-
         db = get_db()
-        team = db(
-            (db.teams.id == team_id) & (db.teams.deleted_at == None)  # noqa: E711
-        ).select(limitby=(0, 1)).first()
+        team = (
+            db((db.teams.id == team_id) & (db.teams.deleted_at == None))  # noqa: E711
+            .select(limitby=(0, 1))
+            .first()
+        )
         if team is None:
             return {"team_not_found": True}
 
-        membership = db(
-            (db.team_memberships.team_id == team_id)
-            & (db.team_memberships.user_id == user_id)
-        ).select(limitby=(0, 1)).first()
+        membership = (
+            db(
+                (db.team_memberships.team_id == team_id)
+                & (db.team_memberships.user_id == user_id)
+            )
+            .select(limitby=(0, 1))
+            .first()
+        )
         if membership is None:
             return {"not_found": True}
 
@@ -488,5 +600,10 @@ async def remove_team_member(team_id: int, user_id: int) -> tuple:
     if result.get("not_found"):
         return jsonify({"error": "not_found", "message": "Team member not found"}), 404
 
-    logger.info("Member removed: user_id=%d team_id=%d by user id=%d", user_id, team_id, g.user_id)
+    logger.info(
+        "Member removed: user_id=%d team_id=%d by user id=%d",
+        user_id,
+        team_id,
+        g.user_id,
+    )
     return jsonify({"message": "Team member removed successfully"}), 200

@@ -7,12 +7,13 @@ Schema is managed by Alembic — see apps/manager/migrations/.
 DO NOT add define_table() calls here. Tables are created by Alembic migrations
 and auto-reflected by penguin-dal at runtime.
 """
+
 from __future__ import annotations
 
 import os
 
-from penguin_dal import DB
 from models.operations import OperationRecord  # noqa: F401
+from penguin_dal import DB
 
 # ---------------------------------------------------------------------------
 # Database configuration from environment variables

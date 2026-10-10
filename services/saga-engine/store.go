@@ -125,9 +125,7 @@ func (s *SagaStore) StartRun(templateID, tenant string) (SagaRun, error) {
 	// Deep copy StepResults slice to avoid sharing underlying array
 	runCopy := *run
 	runCopy.StepResults = make([]StepResult, len(run.StepResults))
-	for i, sr := range run.StepResults {
-		runCopy.StepResults[i] = sr
-	}
+	copy(runCopy.StepResults, run.StepResults)
 	s.mu.Unlock()
 
 	go advanceRun(s, run)

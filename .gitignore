@@ -1,6 +1,9 @@
 # Git Worktrees
 .worktrees/
 
+# Subagent-driven-development scratch (ledger, briefs, review packages)
+.superpowers/
+
 # Operating System
 .DS_Store
 .DS_Store?

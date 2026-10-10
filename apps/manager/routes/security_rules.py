@@ -1,9 +1,10 @@
 """Security rule management routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -15,11 +16,10 @@ security_rules_bp = Blueprint("security_rules_bp", __name__, url_prefix="/api/v1
 @require_auth
 async def list_security_rules():
     """List all security rules, sorted by priority."""
+
     def _query():
         db = get_db()
-        rows = db(db.security_rule.id > 0).select(
-            orderby=db.security_rule.priority
-        )
+        rows = db(db.security_rule.id > 0).select(orderby=db.security_rule.priority)
         return [r.as_dict() for r in rows]
 
     rules = await asyncio.to_thread(_query)
@@ -40,7 +40,6 @@ async def create_security_rule():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         rule_id = db.security_rule.insert(
             name=body["name"],
@@ -63,6 +62,7 @@ async def create_security_rule():
 @require_auth
 async def get_security_rule(rule_id: int):
     """Get a single security rule."""
+
     def _query():
         db = get_db()
         row = db.security_rule[rule_id]
@@ -83,12 +83,19 @@ async def update_security_rule(rule_id: int):
         return jsonify({"error": "Request body required"}), 400
 
     def _update():
-
         db = get_db()
         row = db.security_rule[rule_id]
         if not row:
             return None
-        updatable = ["name", "rule_type", "action", "priority", "pattern", "description", "enabled"]
+        updatable = [
+            "name",
+            "rule_type",
+            "action",
+            "priority",
+            "pattern",
+            "description",
+            "enabled",
+        ]
         updates = {k: body[k] for k in updatable if k in body}
         if updates:
             db(db.security_rule.id == rule_id).update(**updates)
@@ -105,6 +112,7 @@ async def update_security_rule(rule_id: int):
 @require_role("admin")
 async def delete_security_rule(rule_id: int):
     """Delete a security rule."""
+
     def _delete():
         db = get_db()
         row = db.security_rule[rule_id]

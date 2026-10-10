@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4
@@ -42,14 +44,14 @@ jobs:
 
       - name: Get epoch timestamp
         id: epoch
-        run: echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        run: echo "timestamp=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Determine platform tag
         id: platform-tag
         run: |
           case "${{ matrix.platform }}" in
-            linux/amd64) echo "tag=amd64" >> $GITHUB_OUTPUT ;;
-            linux/arm64) echo "tag=arm64" >> $GITHUB_OUTPUT ;;
+            linux/amd64) echo "tag=amd64" >> "$GITHUB_OUTPUT" ;;
+            linux/arm64) echo "tag=arm64" >> "$GITHUB_OUTPUT" ;;
           esac
 
       - name: Build and push Docker image
@@ -80,12 +82,14 @@ jobs:
 
       - name: Get epoch timestamp
         id: epoch
-        run: echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        run: echo "timestamp=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Create and push nightly manifest
+        env:
+          TIMESTAMP: ${{ steps.epoch.outputs.timestamp }}
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/${{ github.repository }}:nightly \
-            -t ghcr.io/${{ github.repository }}:nightly-${{ steps.epoch.outputs.timestamp }} \
-            ghcr.io/${{ github.repository }}:nightly-${{ steps.epoch.outputs.timestamp }}-amd64 \
-            ghcr.io/${{ github.repository }}:nightly-${{ steps.epoch.outputs.timestamp }}-arm64
+            -t "ghcr.io/${{ github.repository }}:nightly" \
+            -t "ghcr.io/${{ github.repository }}:nightly-${TIMESTAMP}" \
+            "ghcr.io/${{ github.repository }}:nightly-${TIMESTAMP}-amd64" \
+            "ghcr.io/${{ github.repository }}:nightly-${TIMESTAMP}-arm64"

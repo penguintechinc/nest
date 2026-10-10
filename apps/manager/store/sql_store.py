@@ -5,9 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from penguin_dal import AsyncDB
-
 from models.operations import OperationRecord
+from penguin_dal import AsyncDB
 from store.store import OperationStore
 
 

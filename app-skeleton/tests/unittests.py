@@ -1,7 +1,7 @@
 import unittest
 
-class TestAppName(unittest.TestCase):
 
+class TestAppName(unittest.TestCase):
     def setUp(self):
         # Setup code to run before each test
         pass
@@ -14,5 +14,6 @@ class TestAppName(unittest.TestCase):
         # Example test case
         self.assertEqual(1, 1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

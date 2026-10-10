@@ -74,7 +74,7 @@ func (p *LinodeStorageProvisioner) ProvisionObjectBucket(ctx context.Context, cf
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Linode create bucket returned %d: %s", resp.StatusCode, b)
+		return nil, fmt.Errorf("linode create bucket returned %d: %s", resp.StatusCode, b)
 	}
 
 	return &ObjectBucketInfo{
@@ -158,13 +158,13 @@ func (p *LinodeStorageProvisioner) ProvisionBlockVolume(ctx context.Context, cfg
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Linode Volumes API: %w", err)
+		return nil, fmt.Errorf("linode Volumes API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Linode Volumes create returned %d: %s", resp.StatusCode, rb)
+		return nil, fmt.Errorf("linode Volumes create returned %d: %s", resp.StatusCode, rb)
 	}
 
 	var result struct {
@@ -202,7 +202,7 @@ func (p *LinodeStorageProvisioner) DeprovisionBlockVolume(ctx context.Context, c
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Linode Volumes delete: %w", err)
+		return fmt.Errorf("linode Volumes delete: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -216,7 +216,7 @@ func (p *LinodeStorageProvisioner) DeprovisionBlockVolume(ctx context.Context, c
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Linode Volumes delete returned %d: %s", resp.StatusCode, b)
+		return fmt.Errorf("linode Volumes delete returned %d: %s", resp.StatusCode, b)
 	}
 	return nil
 }
@@ -236,13 +236,13 @@ func (p *LinodeStorageProvisioner) GetBlockVolumeStatus(ctx context.Context, cfg
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Linode Volumes get: %w", err)
+		return nil, fmt.Errorf("linode Volumes get: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Linode Volumes get returned %d: %s", resp.StatusCode, b)
+		return nil, fmt.Errorf("linode Volumes get returned %d: %s", resp.StatusCode, b)
 	}
 
 	var result struct {

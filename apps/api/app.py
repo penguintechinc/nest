@@ -1,44 +1,47 @@
 """Quart application factory and route registration."""
+
 import logging
-import os
 import uuid
 from datetime import datetime, timezone
 
 from opentelemetry import trace
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from quart import Quart, jsonify, request, g, current_app
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from quart import Quart, current_app, g, jsonify, request
 
 _api_logger = logging.getLogger("nest.api")
 _tracer = trace.get_tracer("nest-api")
 
 from catalog import CATALOG
-from middleware import tenant_middleware, get_tenant, get_claims, check_rate_limit, require_scope
 from handlers import (
-    list_data_resources,
     create_data_resource,
-    get_data_resource,
-    delete_data_resource,
-    list_snapshots,
-    create_snapshot,
-    delete_snapshot,
-    list_protection_policies,
     create_protection_policy,
-    delete_protection_policy,
-    list_search_pools,
     create_search_pool,
-    get_search_pool,
+    create_snapshot,
+    delete_data_resource,
+    delete_protection_policy,
     delete_search_pool,
+    delete_snapshot,
+    get_data_resource,
+    get_search_pool,
+    list_data_resources,
+    list_protection_policies,
+    list_search_pools,
+    list_snapshots,
 )
+from handlers.anomaly import list_anomalies
+from handlers.cost import get_cost_report, get_cost_summary
 from handlers.import_handler import (
-    snapshot_data_resource,
-    restore_data_resource,
     introspect_imported_resource,
     migrate_to_managed,
+    restore_data_resource,
+    snapshot_data_resource,
 )
-from handlers.cost import get_cost_report, get_cost_summary
-from handlers.anomaly import list_anomalies
+from middleware import (
+    check_rate_limit,
+    get_claims,
+    tenant_middleware,
+)
 from store import MemoryStore, Store
-
 
 # Prometheus metrics
 requests_total = Counter(
@@ -100,6 +103,7 @@ def create_app(store: Store | None = None) -> Quart:
 
             if not claims:
                 from werkzeug.exceptions import Forbidden
+
                 raise Forbidden(
                     response={
                         "code": "nest.auth.scope_denied",
@@ -118,6 +122,7 @@ def create_app(store: Store | None = None) -> Quart:
 
             if not has_scope:
                 from werkzeug.exceptions import Forbidden
+
                 raise Forbidden(
                     response={
                         "code": "nest.auth.scope_denied",
@@ -267,9 +272,7 @@ def create_app(store: Store | None = None) -> Quart:
         await auth_middleware(required_scope="nest:dataresource:read")
         return await get_data_resource(store)
 
-    @app.route(
-        "/api/v1/tenants/<tenant_id>/data-resources/<name>", methods=["DELETE"]
-    )
+    @app.route("/api/v1/tenants/<tenant_id>/data-resources/<name>", methods=["DELETE"])
     async def delete_dr(tenant_id: str, name: str):
         """Delete a DataResource."""
         await auth_middleware(required_scope="nest:dataresource:delete")
@@ -365,7 +368,9 @@ def create_app(store: Store | None = None) -> Quart:
         await auth_middleware(required_scope="nest:policy:write")
         return await create_protection_policy(store)
 
-    @app.route("/api/v1/tenants/<tenant_id>/protection-policies/<name>", methods=["DELETE"])
+    @app.route(
+        "/api/v1/tenants/<tenant_id>/protection-policies/<name>", methods=["DELETE"]
+    )
     async def delete_policy_route(tenant_id: str, name: str):
         """Delete a DataProtectionPolicy."""
         await auth_middleware(required_scope="nest:policy:delete")
@@ -417,6 +422,7 @@ def create_app(store: Store | None = None) -> Quart:
         return await list_anomalies(tenant_id)
 
     from telemetry import configure_telemetry
+
     configure_telemetry(app)
 
     return app

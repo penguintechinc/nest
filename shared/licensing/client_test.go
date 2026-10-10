@@ -19,10 +19,10 @@ func TestNewClient(t *testing.T) {
 	// Clear env var for default test
 	os.Unsetenv("LICENSE_SERVER_URL")
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 
-	if client.LicenseKey != "PENG-1234-5678-90AB-CDEF-TEST" {
-		t.Errorf("Expected license key 'PENG-1234-5678-90AB-CDEF-TEST', got '%s'", client.LicenseKey)
+	if client.LicenseKey != "PENG-0000-0000-0000-0000-FAKE" {
+		t.Errorf("Expected license key 'PENG-0000-0000-0000-0000-FAKE', got '%s'", client.LicenseKey)
 	}
 	if client.Product != "myproduct" {
 		t.Errorf("Expected product 'myproduct', got '%s'", client.Product)
@@ -43,7 +43,7 @@ func TestNewClientWithCustomURL(t *testing.T) {
 
 	os.Setenv("LICENSE_SERVER_URL", "https://custom.license.server")
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "product")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "product")
 
 	if client.BaseURL != "https://custom.license.server" {
 		t.Errorf("Expected BaseURL 'https://custom.license.server', got '%s'", client.BaseURL)
@@ -60,7 +60,7 @@ func TestNewClientFromEnvBothSet(t *testing.T) {
 		os.Setenv("PRODUCT_NAME", originalProduct)
 	}()
 
-	os.Setenv("LICENSE_KEY", "PENG-1234-5678-90AB-CDEF-TEST")
+	os.Setenv("LICENSE_KEY", "PENG-0000-0000-0000-0000-FAKE")
 	os.Setenv("PRODUCT_NAME", "myproduct")
 
 	client := NewClientFromEnv()
@@ -69,8 +69,8 @@ func TestNewClientFromEnvBothSet(t *testing.T) {
 		t.Errorf("Expected client to be created, got nil")
 		return
 	}
-	if client.LicenseKey != "PENG-1234-5678-90AB-CDEF-TEST" {
-		t.Errorf("Expected license key 'PENG-1234-5678-90AB-CDEF-TEST', got '%s'", client.LicenseKey)
+	if client.LicenseKey != "PENG-0000-0000-0000-0000-FAKE" {
+		t.Errorf("Expected license key 'PENG-0000-0000-0000-0000-FAKE', got '%s'", client.LicenseKey)
 	}
 	if client.Product != "myproduct" {
 		t.Errorf("Expected product 'myproduct', got '%s'", client.Product)
@@ -107,7 +107,7 @@ func TestNewClientFromEnvProductNameMissing(t *testing.T) {
 		os.Setenv("PRODUCT_NAME", originalProduct)
 	}()
 
-	os.Setenv("LICENSE_KEY", "PENG-1234-5678-90AB-CDEF-TEST")
+	os.Setenv("LICENSE_KEY", "PENG-0000-0000-0000-0000-FAKE")
 	os.Unsetenv("PRODUCT_NAME")
 
 	client := NewClientFromEnv()
@@ -144,7 +144,7 @@ func TestValidateSuccess(t *testing.T) {
 		Valid:      true,
 		Customer:   "ACME Corp",
 		Product:    "myproduct",
-		LicenseKey: "PENG-1234-5678-90AB-CDEF-TEST",
+		LicenseKey: "PENG-0000-0000-0000-0000-FAKE",
 		ExpiresAt:  time.Now().Add(365 * 24 * time.Hour),
 		IssuedAt:   time.Now().Add(-30 * 24 * time.Hour),
 		Tier:       "Enterprise",
@@ -172,7 +172,7 @@ func TestValidateSuccess(t *testing.T) {
 		}
 
 		auth := r.Header.Get("Authorization")
-		if auth != "Bearer PENG-1234-5678-90AB-CDEF-TEST" {
+		if auth != "Bearer PENG-0000-0000-0000-0000-FAKE" {
 			t.Errorf("Expected Bearer token, got %s", auth)
 		}
 
@@ -181,7 +181,7 @@ func TestValidateSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	response, err := client.Validate()
@@ -216,7 +216,7 @@ func TestValidateInvalidResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	response, err := client.Validate()
@@ -231,7 +231,7 @@ func TestValidateInvalidResponse(t *testing.T) {
 
 // TestValidateNetworkError tests validation with network error
 func TestValidateNetworkError(t *testing.T) {
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = "http://nonexistent.server.local:9999"
 	client.HTTPClient.Timeout = 1 * time.Second
 
@@ -266,7 +266,7 @@ func TestCheckFeatureSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	enabled, err := client.CheckFeature("advanced_analytics")
@@ -296,7 +296,7 @@ func TestCheckFeatureDisabled(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	enabled, err := client.CheckFeature("sso")
@@ -324,7 +324,7 @@ func TestCheckFeatureNotInResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	enabled, err := client.CheckFeature("nonexistent")
@@ -358,7 +358,7 @@ func TestKeepaliveSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 	client.ServerID = "srv_123"
 
@@ -378,7 +378,7 @@ func TestKeepaliveWithoutServerID(t *testing.T) {
 			resp := ValidationResponse{
 				Valid:      true,
 				Product:    "myproduct",
-				LicenseKey: "PENG-1234-5678-90AB-CDEF-TEST",
+				LicenseKey: "PENG-0000-0000-0000-0000-FAKE",
 				Metadata:   Metadata{ServerID: "srv_456"},
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -390,7 +390,7 @@ func TestKeepaliveWithoutServerID(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	err := client.Keepalive(nil)
@@ -409,7 +409,7 @@ func TestKeepaliveWithoutServerID(t *testing.T) {
 // TestIsValidLicenseKeyValid tests valid license key format
 func TestIsValidLicenseKeyValid(t *testing.T) {
 	validKeys := []string{
-		"PENG-1234-5678-90AB-CDEF-TEST",
+		"PENG-0000-0000-0000-0000-FAKE",
 		"PENG-AAAA-BBBB-CCCC-DDDD-EEEE",
 		"PENG-0000-0000-0000-0000-0000",
 	}
@@ -426,7 +426,7 @@ func TestIsValidLicenseKeyInvalid(t *testing.T) {
 	invalidKeys := []string{
 		"",                                    // Empty
 		"PENG-1234-5678-90AB-CDEF",            // Too short
-		"PENG-1234-5678-90AB-CDEF-TEST-EXTRA", // Too long
+		"PENG-0000-0000-0000-0000-FAKE-EXTRA", // Too long
 		"WRONG-1234-5678-90AB-CDEF-TEST",      // Wrong prefix
 		"PENG1234567890ABCDEFTEST",            // No dashes
 		"PENG-123-567-90AB-CDEF-TEST",         // Wrong number of segments
@@ -448,7 +448,7 @@ func TestIsValidLicenseKeyLength(t *testing.T) {
 	}{
 		{
 			name:     "exactly 29 chars",
-			key:      "PENG-1234-5678-90AB-CDEF-TEST",
+			key:      "PENG-0000-0000-0000-0000-FAKE",
 			expected: true,
 		},
 		{
@@ -458,7 +458,7 @@ func TestIsValidLicenseKeyLength(t *testing.T) {
 		},
 		{
 			name:     "30 chars",
-			key:      "PENG-1234-5678-90AB-CDEF-TEST1",
+			key:      "PENG-0000-0000-0000-0000-FAKE1",
 			expected: false,
 		},
 	}
@@ -482,7 +482,7 @@ func TestIsValidLicenseKeyDashCount(t *testing.T) {
 	}{
 		{
 			name:     "exactly 5 dashes",
-			key:      "PENG-1234-5678-90AB-CDEF-TEST",
+			key:      "PENG-0000-0000-0000-0000-FAKE",
 			expected: true,
 		},
 		{
@@ -515,7 +515,7 @@ func TestMakeRequestUnmarshalError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	response, err := client.Validate()
@@ -555,7 +555,7 @@ func TestValidationResponseStructure(t *testing.T) {
 		"valid": true,
 		"customer": "Test Corp",
 		"product": "testproduct",
-		"license_key": "PENG-1234-5678-90AB-CDEF-TEST",
+		"license_key": "PENG-0000-0000-0000-0000-FAKE",
 		"expires_at": "2025-04-22T00:00:00Z",
 		"issued_at": "2024-04-22T00:00:00Z",
 		"tier": "Enterprise",
@@ -636,7 +636,7 @@ func TestMakeRequestPayloadMarshaling(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	client.Validate()
@@ -644,7 +644,7 @@ func TestMakeRequestPayloadMarshaling(t *testing.T) {
 
 // TestHTTPClientTimeout tests that HTTP client has timeout set
 func TestHTTPClientTimeout(t *testing.T) {
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 
 	if client.HTTPClient.Timeout != 30*time.Second {
 		t.Errorf("Expected HTTPClient.Timeout=30s, got %v", client.HTTPClient.Timeout)
@@ -658,7 +658,7 @@ func TestValidateWithInvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	response, err := client.Validate()
@@ -682,7 +682,7 @@ func TestKeepaliveRequestContentType(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 	client.ServerID = "srv_123"
 
@@ -700,7 +700,7 @@ func TestValidateRequestContentType(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	client.Validate()
@@ -714,7 +714,7 @@ func TestCheckFeatureInvalidResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	enabled, err := client.CheckFeature("test_feature")
@@ -729,7 +729,7 @@ func TestCheckFeatureInvalidResponse(t *testing.T) {
 
 // TestCheckFeatureNetworkError tests CheckFeature with network error
 func TestCheckFeatureNetworkError(t *testing.T) {
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = "http://nonexistent.server.local:9999"
 	client.HTTPClient.Timeout = 1 * time.Second
 
@@ -751,7 +751,7 @@ func TestCheckFeatureNonOKStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	enabled, err := client.CheckFeature("test_feature")
@@ -774,7 +774,7 @@ func TestKeepaliveError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 	client.ServerID = "srv_123"
 
@@ -795,7 +795,7 @@ func TestKeepaliveValidationError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	err := client.Keepalive(nil)
@@ -814,7 +814,7 @@ func TestMakeRequestBodyReadError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	// This test verifies normal operation; the error path in makeRequest is
@@ -836,7 +836,7 @@ func TestMakeRequestMarshalError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	// Test with a valid payload to ensure marshaling works
@@ -851,7 +851,7 @@ func TestMakeRequestMarshalError(t *testing.T) {
 
 // TestAuthorizationHeader tests that Authorization header is set correctly
 func TestAuthorizationHeader(t *testing.T) {
-	expectedAuth := "Bearer PENG-1234-5678-90AB-CDEF-TEST"
+	expectedAuth := "Bearer PENG-0000-0000-0000-0000-FAKE"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth != expectedAuth {
@@ -862,7 +862,7 @@ func TestAuthorizationHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	client.Validate()
@@ -875,14 +875,14 @@ func TestValidateStoresServerID(t *testing.T) {
 		resp := ValidationResponse{
 			Valid:      true,
 			Product:    "myproduct",
-			LicenseKey: "PENG-1234-5678-90AB-CDEF-TEST",
+			LicenseKey: "PENG-0000-0000-0000-0000-FAKE",
 			Metadata:   Metadata{ServerID: "srv_special"},
 		}
 		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	response, err := client.Validate()
@@ -905,14 +905,14 @@ func TestValidateDoesNotStoreServerIDOnInvalid(t *testing.T) {
 		resp := ValidationResponse{
 			Valid:      false,
 			Product:    "myproduct",
-			LicenseKey: "PENG-1234-5678-90AB-CDEF-TEST",
+			LicenseKey: "PENG-0000-0000-0000-0000-FAKE",
 			Metadata:   Metadata{ServerID: "srv_123"},
 		}
 		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
-	client := NewClient("PENG-1234-5678-90AB-CDEF-TEST", "myproduct")
+	client := NewClient("PENG-0000-0000-0000-0000-FAKE", "myproduct")
 	client.BaseURL = server.URL
 
 	response, err := client.Validate()

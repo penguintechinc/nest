@@ -149,7 +149,7 @@ func TestCollectSMARTWithScheduling_RecentlyCached(t *testing.T) {
 
 	result := ic.collectSMARTWithScheduling(ctx, devName)
 	if result == nil {
-		t.Error("expected non-nil cached SMARTInfo")
+		t.Fatal("expected non-nil cached SMARTInfo")
 	}
 	if result.HoursOn != cached.HoursOn {
 		t.Errorf("expected cached HoursOn %d, got %d", cached.HoursOn, result.HoursOn)

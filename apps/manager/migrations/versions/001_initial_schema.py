@@ -18,6 +18,7 @@ Revision ID: 001_initial
 Revises:
 Create Date: 2026-03-27
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -93,7 +94,12 @@ def upgrade() -> None:
         "resources",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("team_id", sa.Integer(), sa.ForeignKey("teams.id"), nullable=True),
-        sa.Column("resource_type_id", sa.Integer(), sa.ForeignKey("resource_types.id"), nullable=True),
+        sa.Column(
+            "resource_type_id",
+            sa.Integer(),
+            sa.ForeignKey("resource_types.id"),
+            nullable=True,
+        ),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("config", sa.JSON(), nullable=True),
@@ -108,7 +114,9 @@ def upgrade() -> None:
     op.create_table(
         "resource_users",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=False),
+        sa.Column(
+            "resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=False
+        ),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("access_level", sa.String(50), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
@@ -120,7 +128,9 @@ def upgrade() -> None:
     op.create_table(
         "resource_stats",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=False),
+        sa.Column(
+            "resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=False
+        ),
         sa.Column("metric_name", sa.String(100), nullable=False),
         sa.Column("metric_value", sa.String(255), nullable=True),
         sa.Column("recorded_at", sa.DateTime(), nullable=True),
@@ -132,7 +142,9 @@ def upgrade() -> None:
     op.create_table(
         "backup_jobs",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=True),
+        sa.Column(
+            "resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=True
+        ),
         sa.Column("status", sa.String(50), nullable=True),
         sa.Column("started_at", sa.DateTime(), nullable=True),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
@@ -145,7 +157,9 @@ def upgrade() -> None:
     op.create_table(
         "provisioning_jobs",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=True),
+        sa.Column(
+            "resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=True
+        ),
         sa.Column("job_type", sa.String(100), nullable=True),
         sa.Column("status", sa.String(50), nullable=True),
         sa.Column("payload", sa.JSON(), nullable=True),
@@ -173,8 +187,15 @@ def upgrade() -> None:
     op.create_table(
         "certificates",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("ca_id", sa.Integer(), sa.ForeignKey("certificate_authorities.id"), nullable=True),
-        sa.Column("resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=True),
+        sa.Column(
+            "ca_id",
+            sa.Integer(),
+            sa.ForeignKey("certificate_authorities.id"),
+            nullable=True,
+        ),
+        sa.Column(
+            "resource_id", sa.Integer(), sa.ForeignKey("resources.id"), nullable=True
+        ),
         sa.Column("common_name", sa.String(255), nullable=True),
         sa.Column("certificate", sa.Text(), nullable=True),
         sa.Column("expires_at", sa.DateTime(), nullable=True),
@@ -252,7 +273,12 @@ def upgrade() -> None:
         "user_permission",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("permission_type", sa.String(50), nullable=False),
         sa.Column("database_name", sa.String(255), nullable=True),
         sa.Column("table_name", sa.String(255), nullable=True),
@@ -268,9 +294,18 @@ def upgrade() -> None:
         "user_profile",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("api_key", sa.String(512), nullable=True, comment="Encrypted API key"),
-        sa.Column("rate_limit_per_hour", sa.Integer(), nullable=False, server_default="1000"),
-        sa.Column("two_factor_secret", sa.Text(), nullable=True, comment="Encrypted TOTP secret"),
+        sa.Column(
+            "api_key", sa.String(512), nullable=True, comment="Encrypted API key"
+        ),
+        sa.Column(
+            "rate_limit_per_hour", sa.Integer(), nullable=False, server_default="1000"
+        ),
+        sa.Column(
+            "two_factor_secret",
+            sa.Text(),
+            nullable=True,
+            comment="Encrypted TOTP secret",
+        ),
         sa.Column("ip_whitelist", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
@@ -284,11 +319,18 @@ def upgrade() -> None:
         "temporary_access",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("token", sa.String(512), nullable=False),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("permissions", sa.JSON(), nullable=False),
         sa.Column("expires_at", sa.DateTime(), nullable=False),
         sa.Column("used_at", sa.DateTime(), nullable=True),
-        sa.Column("created_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column(
+            "created_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=False
+        ),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.UniqueConstraint("token", name="uq_temporary_access_token"),
     )
@@ -320,10 +362,19 @@ def upgrade() -> None:
     op.create_table(
         "managed_database",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("database_name", sa.String(255), nullable=False),
-        sa.Column("backup_enabled", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("max_connections", sa.Integer(), nullable=False, server_default="100"),
+        sa.Column(
+            "backup_enabled", sa.Boolean(), nullable=False, server_default="false"
+        ),
+        sa.Column(
+            "max_connections", sa.Integer(), nullable=False, server_default="100"
+        ),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
     )
@@ -337,7 +388,12 @@ def upgrade() -> None:
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("file_content", sa.Text(), nullable=False),
         sa.Column("file_hash", sa.String(128), nullable=False),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=True),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=True,
+        ),
         sa.Column("allowed_databases", sa.JSON(), nullable=True),
         sa.Column("created_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
@@ -350,7 +406,12 @@ def upgrade() -> None:
     op.create_table(
         "blocked_database",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("database_name", sa.String(255), nullable=False),
         sa.Column("block_type", sa.String(50), nullable=False),
         sa.Column("reason", sa.Text(), nullable=True),
@@ -363,7 +424,12 @@ def upgrade() -> None:
     op.create_table(
         "database_schema",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("database_name", sa.String(255), nullable=False),
         sa.Column("schema_json", sa.JSON(), nullable=False),
         sa.Column("last_synced_at", sa.DateTime(), nullable=True),
@@ -392,7 +458,12 @@ def upgrade() -> None:
     op.create_table(
         "threat_intel_indicator",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("feed_id", sa.Integer(), sa.ForeignKey("threat_intel_feed.id"), nullable=False),
+        sa.Column(
+            "feed_id",
+            sa.Integer(),
+            sa.ForeignKey("threat_intel_feed.id"),
+            nullable=False,
+        ),
         sa.Column("indicator_type", sa.String(50), nullable=False),
         sa.Column("value", sa.Text(), nullable=False),
         sa.Column("confidence", sa.Integer(), nullable=False, server_default="50"),
@@ -413,7 +484,12 @@ def upgrade() -> None:
             sa.ForeignKey("database_server.id"),
             nullable=False,
         ),
-        sa.Column("sql_injection_detection", sa.Boolean(), nullable=False, server_default="true"),
+        sa.Column(
+            "sql_injection_detection",
+            sa.Boolean(),
+            nullable=False,
+            server_default="true",
+        ),
         sa.Column("allowed_ips", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
@@ -432,7 +508,12 @@ def upgrade() -> None:
             sa.ForeignKey("threat_intel_indicator.id"),
             nullable=False,
         ),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("matched_value", sa.Text(), nullable=False),
         sa.Column("action_taken", sa.String(50), nullable=False),
         sa.Column("matched_at", sa.DateTime(), nullable=False),
@@ -460,7 +541,12 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("provider_type", sa.String(50), nullable=False),
-        sa.Column("credentials", sa.JSON(), nullable=True, comment="Encrypted cloud credentials"),
+        sa.Column(
+            "credentials",
+            sa.JSON(),
+            nullable=True,
+            comment="Encrypted cloud credentials",
+        ),
         sa.Column("region", sa.String(100), nullable=True),
         sa.Column("active", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column("created_at", sa.DateTime(), nullable=True),
@@ -473,8 +559,18 @@ def upgrade() -> None:
     op.create_table(
         "cloud_database_instance",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("provider_id", sa.Integer(), sa.ForeignKey("cloud_provider.id"), nullable=False),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=True),
+        sa.Column(
+            "provider_id",
+            sa.Integer(),
+            sa.ForeignKey("cloud_provider.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=True,
+        ),
         sa.Column("instance_id", sa.String(255), nullable=False),
         sa.Column("status", sa.String(50), nullable=False, server_default="'unknown'"),
         sa.Column("endpoint", sa.String(512), nullable=True),
@@ -489,7 +585,12 @@ def upgrade() -> None:
     op.create_table(
         "scaling_policy",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("policy_type", sa.String(50), nullable=False),
         sa.Column("trigger_metric", sa.String(100), nullable=False),
         sa.Column("scale_up_threshold", sa.Float(), nullable=True),
@@ -505,8 +606,18 @@ def upgrade() -> None:
     op.create_table(
         "scaling_event",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("policy_id", sa.Integer(), sa.ForeignKey("scaling_policy.id"), nullable=False),
-        sa.Column("server_id", sa.Integer(), sa.ForeignKey("database_server.id"), nullable=False),
+        sa.Column(
+            "policy_id",
+            sa.Integer(),
+            sa.ForeignKey("scaling_policy.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "server_id",
+            sa.Integer(),
+            sa.ForeignKey("database_server.id"),
+            nullable=False,
+        ),
         sa.Column("event_type", sa.String(50), nullable=False),
         sa.Column("status", sa.String(50), nullable=False, server_default="'pending'"),
         sa.Column("triggered_at", sa.DateTime(), nullable=False),

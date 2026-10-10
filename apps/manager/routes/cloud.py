@@ -1,11 +1,12 @@
 """Cloud provider and instance management routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
-from utils.crypto import encrypt_field as encrypt_value, decrypt_field as decrypt_value
+from utils.crypto import encrypt_field as encrypt_value
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +17,15 @@ cloud_bp = Blueprint("cloud_bp", __name__, url_prefix="/api/v1")
 # Cloud Providers
 # ---------------------------------------------------------------------------
 
+
 @cloud_bp.route("/cloud/providers", methods=["GET"])
 @require_auth
 async def list_providers():
     """List all cloud providers."""
+
     def _query():
         db = get_db()
-        rows = db(db.cloud_provider.id > 0).select(
-            orderby=db.cloud_provider.name
-        )
+        rows = db(db.cloud_provider.id > 0).select(orderby=db.cloud_provider.name)
         results = []
         for r in rows:
             d = r.as_dict()
@@ -53,7 +54,6 @@ async def create_provider():
     encrypted = encrypt_value(raw_credentials) if raw_credentials else ""
 
     def _insert():
-
         db = get_db()
         prov_id = db.cloud_provider.insert(
             name=body["name"],
@@ -75,6 +75,7 @@ async def create_provider():
 @require_auth
 async def get_provider(prov_id: int):
     """Get a cloud provider (credentials omitted from response)."""
+
     def _query():
         db = get_db()
         row = db.cloud_provider[prov_id]
@@ -99,7 +100,6 @@ async def update_provider(prov_id: int):
         return jsonify({"error": "Request body required"}), 400
 
     def _update():
-
         db = get_db()
         row = db.cloud_provider[prov_id]
         if not row:
@@ -125,6 +125,7 @@ async def update_provider(prov_id: int):
 @require_role("admin")
 async def delete_provider(prov_id: int):
     """Delete a cloud provider."""
+
     def _delete():
         db = get_db()
         row = db.cloud_provider[prov_id]
@@ -144,15 +145,15 @@ async def delete_provider(prov_id: int):
 # Cloud Instances
 # ---------------------------------------------------------------------------
 
+
 @cloud_bp.route("/cloud/instances", methods=["GET"])
 @require_auth
 async def list_instances():
     """List all cloud instances."""
+
     def _query():
         db = get_db()
-        rows = db(db.cloud_instance.id > 0).select(
-            orderby=db.cloud_instance.id
-        )
+        rows = db(db.cloud_instance.id > 0).select(orderby=db.cloud_instance.id)
         return [r.as_dict() for r in rows]
 
     instances = await asyncio.to_thread(_query)
@@ -173,7 +174,6 @@ async def create_instance():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         inst_id = db.cloud_instance.insert(
             provider_id=int(body["provider_id"]),
@@ -200,7 +200,6 @@ async def update_instance_status(inst_id: int):
         return jsonify({"error": "Request body required"}), 400
 
     def _update():
-
         db = get_db()
         row = db.cloud_instance[inst_id]
         if not row:

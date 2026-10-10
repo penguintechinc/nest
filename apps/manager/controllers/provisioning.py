@@ -9,24 +9,21 @@ Manages the complete provisioning lifecycle for Kubernetes-based resources inclu
 - Deprovisioning and scaling operations
 """
 
-import os
 import json
 import logging
+import os
 import secrets
-import asyncio
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, Optional
+
 import yaml
-
-from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
 from cryptography.fernet import Fernet
-
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
+from lib.k8s_client import K8sClient
 from penguin_dal.quart_ext import get_db
-from lib.k8s_client import K8sClient, K8sException
-
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ProvisioningStatus:
     """Data class for provisioning status representation"""
+
     resource_id: int
     status: str
     namespace: str
@@ -57,7 +55,7 @@ class EncryptionManager:
             RuntimeError: If ENCRYPTION_KEY is not configured (fail closed).
         """
         if key is None:
-            key = os.getenv('ENCRYPTION_KEY', "").strip()
+            key = os.getenv("ENCRYPTION_KEY", "").strip()
             if not key:
                 raise RuntimeError(
                     "ENCRYPTION_KEY environment variable is required. "
@@ -111,8 +109,10 @@ class CredentialGenerator:
         Returns:
             Random password string
         """
-        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-        return ''.join(secrets.choice(charset) for _ in range(length))
+        charset = (
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+        )
+        return "".join(secrets.choice(charset) for _ in range(length))
 
     @staticmethod
     def generate_username(prefix: str = "user", length: int = 8) -> str:
@@ -125,7 +125,10 @@ class CredentialGenerator:
         Returns:
             Generated username
         """
-        suffix = ''.join(secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(length))
+        suffix = "".join(
+            secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789")
+            for _ in range(length)
+        )
         return f"{prefix}_{suffix}"
 
     @staticmethod
@@ -145,7 +148,6 @@ class TemplateRenderer:
     """Manages Jinja2 template rendering for Kubernetes manifests"""
 
     def __init__(self, template_dir: Optional[str] = None):
-
         db = get_db()
         """Initialize template renderer.
 
@@ -153,14 +155,14 @@ class TemplateRenderer:
             template_dir: Path to templates directory. Defaults to ./templates
         """
         if template_dir is None:
-            template_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
+            template_dir = os.path.join(os.path.dirname(__file__), "..", "templates")
 
         self.template_dir = Path(template_dir)
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)),
             trim_blocks=True,
             lstrip_blocks=True,
-            autoescape=select_autoescape(default_for_string=False, default=False)
+            autoescape=select_autoescape(default_for_string=False, default=False),
         )
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
@@ -179,14 +181,16 @@ class TemplateRenderer:
         try:
             template = self.env.get_template(template_name)
             return template.render(**context)
-        except TemplateNotFound as e:
+        except TemplateNotFound:
             logger.error(f"Template not found: {template_name}")
             raise
         except Exception as e:
             logger.error(f"Template rendering error: {e}")
             raise
 
-    def render_statefulset_template(self, resource_type: str, context: Dict[str, Any]) -> str:
+    def render_statefulset_template(
+        self, resource_type: str, context: Dict[str, Any]
+    ) -> str:
         """Render a StatefulSet template for the given resource type.
 
         Args:
@@ -198,10 +202,10 @@ class TemplateRenderer:
         """
         # Map resource types to template names
         type_mapping = {
-            'db-postgresql': 'statefulset/postgresql.yaml',
-            'db-redis': 'statefulset/redis.yaml',
-            'db-mariadb': 'statefulset/mariadb.yaml',
-            'db-valkey': 'statefulset/valkey.yaml',
+            "db-postgresql": "statefulset/postgresql.yaml",
+            "db-redis": "statefulset/redis.yaml",
+            "db-mariadb": "statefulset/mariadb.yaml",
+            "db-valkey": "statefulset/valkey.yaml",
         }
 
         template_name = type_mapping.get(resource_type)
@@ -215,33 +219,30 @@ class ProvisioningController:
     """Controller for managing Kubernetes resource provisioning lifecycle"""
 
     # Supported resource types
-    SUPPORTED_RESOURCE_TYPES = [
-        'db-postgresql',
-        'db-redis',
-        'db-mariadb',
-        'db-valkey'
-    ]
+    SUPPORTED_RESOURCE_TYPES = ["db-postgresql", "db-redis", "db-mariadb", "db-valkey"]
 
     # Service type mapping
     SERVICE_TYPE_MAPPING = {
-        'db-postgresql': 'ClusterIP',
-        'db-redis': 'ClusterIP',
-        'db-mariadb': 'ClusterIP',
-        'db-valkey': 'ClusterIP',
+        "db-postgresql": "ClusterIP",
+        "db-redis": "ClusterIP",
+        "db-mariadb": "ClusterIP",
+        "db-valkey": "ClusterIP",
     }
 
     # Default port mapping
     DEFAULT_PORTS = {
-        'db-postgresql': 5432,
-        'db-redis': 6379,
-        'db-mariadb': 3306,
-        'db-valkey': 6379,
+        "db-postgresql": 5432,
+        "db-redis": 6379,
+        "db-mariadb": 3306,
+        "db-valkey": 6379,
     }
 
-    def __init__(self, k8s_client: Optional[K8sClient] = None,
-                 template_renderer: Optional[TemplateRenderer] = None,
-                 encryption_manager: Optional[EncryptionManager] = None):
-
+    def __init__(
+        self,
+        k8s_client: Optional[K8sClient] = None,
+        template_renderer: Optional[TemplateRenderer] = None,
+        encryption_manager: Optional[EncryptionManager] = None,
+    ):
         db = get_db()
         """Initialize provisioning controller.
 
@@ -255,7 +256,9 @@ class ProvisioningController:
         self.encryption_manager = encryption_manager or EncryptionManager()
         self.credential_generator = CredentialGenerator()
 
-    def provision_resource(self, resource_id: int, created_by_user_id: int) -> ProvisioningStatus:
+    def provision_resource(
+        self, resource_id: int, created_by_user_id: int
+    ) -> ProvisioningStatus:
         """Main provisioning workflow for a resource.
 
         Steps:
@@ -284,6 +287,7 @@ class ProvisioningController:
             ValueError: If resource not found or invalid type
             K8sException: If Kubernetes operation fails
         """
+        db = get_db()
         job_record = None
 
         try:
@@ -292,7 +296,9 @@ class ProvisioningController:
             if not resource:
                 raise ValueError(f"Resource not found: {resource_id}")
 
-            logger.info(f"Starting provisioning for resource: {resource.name} (ID: {resource_id})")
+            logger.info(
+                f"Starting provisioning for resource: {resource.name} (ID: {resource_id})"
+            )
 
             # Get resource type info
             resource_type = db.resource_types[resource.resource_type_id]
@@ -319,13 +325,13 @@ class ProvisioningController:
 
             # Step 4: Generate credentials
             credentials = self._generate_resource_credentials(resource_type_name)
-            logger.info(f"Generated credentials for resource type: {resource_type_name}")
+            logger.info(
+                f"Generated credentials for resource type: {resource_type_name}"
+            )
 
             # Step 5: Create Kubernetes Secret with credentials
             secret_name = f"{resource.name}-secret"
-            secret_data = {
-                key: str(value) for key, value in credentials.items()
-            }
+            secret_data = {key: str(value) for key, value in credentials.items()}
             logger.info(f"Creating secret: {secret_name}")
             self.k8s_client.create_secret(namespace, secret_name, secret_data)
 
@@ -335,13 +341,12 @@ class ProvisioningController:
                 resource_type_name=resource_type_name,
                 namespace=namespace,
                 credentials=credentials,
-                secret_name=secret_name
+                secret_name=secret_name,
             )
 
             logger.info(f"Rendering template for resource type: {resource_type_name}")
             manifest_yaml = self.template_renderer.render_statefulset_template(
-                resource_type_name,
-                template_context
+                resource_type_name, template_context
             )
 
             # Parse YAML to separate Service and StatefulSet
@@ -350,22 +355,24 @@ class ProvisioningController:
             statefulset_manifest = None
 
             for manifest in manifests:
-                if manifest['kind'] == 'Service':
+                if manifest["kind"] == "Service":
                     service_manifest = manifest
-                elif manifest['kind'] == 'StatefulSet':
+                elif manifest["kind"] == "StatefulSet":
                     statefulset_manifest = manifest
 
             if not statefulset_manifest:
-                raise ValueError(f"No StatefulSet found in template for {resource_type_name}")
+                raise ValueError(
+                    f"No StatefulSet found in template for {resource_type_name}"
+                )
 
             # Step 8: Create StatefulSet
-            k8s_resource_name = statefulset_manifest['metadata']['name']
+            k8s_resource_name = statefulset_manifest["metadata"]["name"]
             logger.info(f"Creating StatefulSet: {k8s_resource_name}")
             self.k8s_client.create_statefulset(namespace, statefulset_manifest)
 
             # Step 9: Create Service
             if service_manifest:
-                service_name = service_manifest['metadata']['name']
+                service_name = service_manifest["metadata"]["name"]
                 logger.info(f"Creating Service: {service_name}")
                 self.k8s_client.create_service(namespace, service_manifest)
 
@@ -373,9 +380,7 @@ class ProvisioningController:
             logger.info(f"Waiting for StatefulSet {k8s_resource_name} to be ready...")
             max_wait_time = 300  # 5 minutes
             ready = self._wait_for_statefulset_ready(
-                namespace,
-                k8s_resource_name,
-                max_wait_time
+                namespace, k8s_resource_name, max_wait_time
             )
 
             if not ready:
@@ -390,30 +395,32 @@ class ProvisioningController:
             port = self.DEFAULT_PORTS.get(resource_type_name, 5432)
 
             connection_info = {
-                'host': service_endpoint,
-                'port': port,
-                'namespace': namespace,
-                'service_name': service_name or k8s_resource_name,
-                'protocol': 'tcp'
+                "host": service_endpoint,
+                "port": port,
+                "namespace": namespace,
+                "service_name": service_name or k8s_resource_name,
+                "protocol": "tcp",
             }
 
             logger.info(f"Connection info: {connection_info}")
 
             # Step 12: Update resource in database
-            encrypted_credentials = json.dumps({
-                key: self.encryption_manager.encrypt(str(value))
-                for key, value in credentials.items()
-            })
+            encrypted_credentials = json.dumps(
+                {
+                    key: self.encryption_manager.encrypt(str(value))
+                    for key, value in credentials.items()
+                }
+            )
 
             db.resources.update_or_insert(
                 db.resources.id == resource_id,
-                status='active',
+                status="active",
                 k8s_namespace=namespace,
                 k8s_resource_name=k8s_resource_name,
-                k8s_resource_type='StatefulSet',
+                k8s_resource_type="StatefulSet",
                 connection_info=json.dumps(connection_info),
                 credentials=encrypted_credentials,
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
             db.commit()
 
@@ -422,12 +429,12 @@ class ProvisioningController:
             # Step 13: Create provisioning_jobs record
             job_record = db.provisioning_jobs.insert(
                 resource_id=resource_id,
-                job_type='provision',
-                status='completed',
+                job_type="provision",
+                status="completed",
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 logs=f"Successfully provisioned resource {resource.name}",
-                created_by=created_by_user_id
+                created_by=created_by_user_id,
             )
             db.commit()
 
@@ -435,12 +442,12 @@ class ProvisioningController:
 
             return ProvisioningStatus(
                 resource_id=resource_id,
-                status='active',
+                status="active",
                 namespace=namespace,
                 k8s_resource_name=k8s_resource_name,
                 connection_info=connection_info,
                 created_at=resource.created_at,
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
 
         except Exception as e:
@@ -451,8 +458,8 @@ class ProvisioningController:
             try:
                 db.resources.update_or_insert(
                     db.resources.id == resource_id,
-                    status='error',
-                    updated_at=datetime.now()
+                    status="error",
+                    updated_at=datetime.now(),
                 )
                 db.commit()
             except Exception as db_error:
@@ -462,13 +469,13 @@ class ProvisioningController:
             try:
                 db.provisioning_jobs.insert(
                     resource_id=resource_id,
-                    job_type='provision',
-                    status='failed',
+                    job_type="provision",
+                    status="failed",
                     started_at=datetime.now(),
                     completed_at=datetime.now(),
                     error_message=error_msg,
                     logs=error_msg,
-                    created_by=created_by_user_id
+                    created_by=created_by_user_id,
                 )
                 db.commit()
             except Exception as job_error:
@@ -478,17 +485,25 @@ class ProvisioningController:
             try:
                 resource = db.resources[resource_id]
                 if resource and resource.k8s_namespace:
-                    logger.info(f"Attempting rollback for namespace: {resource.k8s_namespace}")
+                    logger.info(
+                        f"Attempting rollback for namespace: {resource.k8s_namespace}"
+                    )
                     self._rollback_provisioning(
                         resource.k8s_namespace,
-                        resource.k8s_resource_name if resource.k8s_resource_name else None
+                        (
+                            resource.k8s_resource_name
+                            if resource.k8s_resource_name
+                            else None
+                        ),
                     )
             except Exception as rollback_error:
                 logger.error(f"Rollback failed: {rollback_error}")
 
             raise
 
-    def deprovision_resource(self, resource_id: int, created_by_user_id: int) -> ProvisioningStatus:
+    def deprovision_resource(
+        self, resource_id: int, created_by_user_id: int
+    ) -> ProvisioningStatus:
         """Deprovisioning workflow for a resource.
 
         Removes all Kubernetes resources associated with a provisioned resource and
@@ -505,15 +520,20 @@ class ProvisioningController:
             ValueError: If resource not found
             K8sException: If Kubernetes operation fails
         """
+        db = get_db()
         try:
             resource = db.resources[resource_id]
             if not resource:
                 raise ValueError(f"Resource not found: {resource_id}")
 
             if not resource.k8s_namespace:
-                raise ValueError(f"Resource {resource_id} has no Kubernetes namespace associated")
+                raise ValueError(
+                    f"Resource {resource_id} has no Kubernetes namespace associated"
+                )
 
-            logger.info(f"Starting deprovisioning for resource: {resource.name} (ID: {resource_id})")
+            logger.info(
+                f"Starting deprovisioning for resource: {resource.name} (ID: {resource_id})"
+            )
 
             # Delete Kubernetes namespace (cascades to all resources within)
             logger.info(f"Deleting namespace: {resource.k8s_namespace}")
@@ -525,22 +545,22 @@ class ProvisioningController:
             # Update resource status
             db.resources.update_or_insert(
                 db.resources.id == resource_id,
-                status='deleted',
+                status="deleted",
                 k8s_namespace=None,
                 k8s_resource_name=None,
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
             db.commit()
 
             # Create deprovisioning job record
             db.provisioning_jobs.insert(
                 resource_id=resource_id,
-                job_type='deprovision',
-                status='completed',
+                job_type="deprovision",
+                status="completed",
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 logs=f"Successfully deprovisioned resource {resource.name}",
-                created_by=created_by_user_id
+                created_by=created_by_user_id,
             )
             db.commit()
 
@@ -548,11 +568,11 @@ class ProvisioningController:
 
             return ProvisioningStatus(
                 resource_id=resource_id,
-                status='deleted',
+                status="deleted",
                 namespace=None,
                 k8s_resource_name=None,
                 created_at=resource.created_at,
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
 
         except Exception as e:
@@ -563,13 +583,13 @@ class ProvisioningController:
             try:
                 db.provisioning_jobs.insert(
                     resource_id=resource_id,
-                    job_type='deprovision',
-                    status='failed',
+                    job_type="deprovision",
+                    status="failed",
                     started_at=datetime.now(),
                     completed_at=datetime.now(),
                     error_message=error_msg,
                     logs=error_msg,
-                    created_by=created_by_user_id
+                    created_by=created_by_user_id,
                 )
                 db.commit()
             except Exception as job_error:
@@ -577,8 +597,9 @@ class ProvisioningController:
 
             raise
 
-    def scale_resource(self, resource_id: int, replicas: int,
-                       created_by_user_id: int) -> ProvisioningStatus:
+    def scale_resource(
+        self, resource_id: int, replicas: int, created_by_user_id: int
+    ) -> ProvisioningStatus:
         """Scale a StatefulSet resource to the specified number of replicas.
 
         Args:
@@ -593,6 +614,7 @@ class ProvisioningController:
             ValueError: If resource not found or invalid replica count
             K8sException: If Kubernetes operation fails
         """
+        db = get_db()
         if replicas < 1:
             raise ValueError(f"Invalid replica count: {replicas}. Must be at least 1")
 
@@ -602,7 +624,9 @@ class ProvisioningController:
                 raise ValueError(f"Resource not found: {resource_id}")
 
             if not resource.k8s_namespace or not resource.k8s_resource_name:
-                raise ValueError(f"Resource {resource_id} is not provisioned in Kubernetes")
+                raise ValueError(
+                    f"Resource {resource_id} is not provisioned in Kubernetes"
+                )
 
             if not resource.can_scale:
                 raise ValueError(f"Resource {resource_id} does not support scaling")
@@ -613,9 +637,7 @@ class ProvisioningController:
 
             # Scale StatefulSet
             self.k8s_client.scale_statefulset(
-                resource.k8s_namespace,
-                resource.k8s_resource_name,
-                replicas
+                resource.k8s_namespace, resource.k8s_resource_name, replicas
             )
 
             # Wait for new replicas to be ready
@@ -623,29 +645,29 @@ class ProvisioningController:
                 resource.k8s_namespace,
                 resource.k8s_resource_name,
                 replicas,
-                timeout=300
+                timeout=300,
             )
 
             # Update resource config
             config = resource.config or {}
-            config['replicas'] = replicas
+            config["replicas"] = replicas
 
             db.resources.update_or_insert(
                 db.resources.id == resource_id,
                 config=json.dumps(config),
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
             db.commit()
 
             # Create scaling job record
             db.provisioning_jobs.insert(
                 resource_id=resource_id,
-                job_type='scale',
-                status='completed',
+                job_type="scale",
+                status="completed",
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 logs=f"Scaled resource to {replicas} replicas",
-                created_by=created_by_user_id
+                created_by=created_by_user_id,
             )
             db.commit()
 
@@ -657,7 +679,7 @@ class ProvisioningController:
                 namespace=resource.k8s_namespace,
                 k8s_resource_name=resource.k8s_resource_name,
                 created_at=resource.created_at,
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
 
         except Exception as e:
@@ -667,13 +689,13 @@ class ProvisioningController:
             try:
                 db.provisioning_jobs.insert(
                     resource_id=resource_id,
-                    job_type='scale',
-                    status='failed',
+                    job_type="scale",
+                    status="failed",
                     started_at=datetime.now(),
                     completed_at=datetime.now(),
                     error_message=error_msg,
                     logs=error_msg,
-                    created_by=created_by_user_id
+                    created_by=created_by_user_id,
                 )
                 db.commit()
             except Exception as job_error:
@@ -681,8 +703,9 @@ class ProvisioningController:
 
             raise
 
-    def update_resource_config(self, resource_id: int, config: Dict[str, Any],
-                               created_by_user_id: int) -> ProvisioningStatus:
+    def update_resource_config(
+        self, resource_id: int, config: Dict[str, Any], created_by_user_id: int
+    ) -> ProvisioningStatus:
         """Update resource configuration.
 
         Updates resource-specific configuration and triggers reconciliation if needed.
@@ -698,13 +721,16 @@ class ProvisioningController:
         Raises:
             ValueError: If resource not found or update not allowed
         """
+        db = get_db()
         try:
             resource = db.resources[resource_id]
             if not resource:
                 raise ValueError(f"Resource not found: {resource_id}")
 
             if not resource.can_modify_config:
-                raise ValueError(f"Resource {resource_id} does not allow configuration modification")
+                raise ValueError(
+                    f"Resource {resource_id} does not allow configuration modification"
+                )
 
             logger.info(f"Updating configuration for resource {resource_id}")
 
@@ -719,28 +745,28 @@ class ProvisioningController:
             db.resources.update_or_insert(
                 db.resources.id == resource_id,
                 config=json.dumps(updated_config),
-                status='updating',
-                updated_at=datetime.now()
+                status="updating",
+                updated_at=datetime.now(),
             )
             db.commit()
 
             # Create update job record
             db.provisioning_jobs.insert(
                 resource_id=resource_id,
-                job_type='update_config',
-                status='completed',
+                job_type="update_config",
+                status="completed",
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
-                logs=f"Updated resource configuration",
-                created_by=created_by_user_id
+                logs="Updated resource configuration",
+                created_by=created_by_user_id,
             )
             db.commit()
 
             # Mark as active again
             db.resources.update_or_insert(
                 db.resources.id == resource_id,
-                status='active',
-                updated_at=datetime.now()
+                status="active",
+                updated_at=datetime.now(),
             )
             db.commit()
 
@@ -748,11 +774,11 @@ class ProvisioningController:
 
             return ProvisioningStatus(
                 resource_id=resource_id,
-                status='active',
+                status="active",
                 namespace=resource.k8s_namespace,
                 k8s_resource_name=resource.k8s_resource_name,
                 created_at=resource.created_at,
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
 
         except Exception as e:
@@ -762,18 +788,18 @@ class ProvisioningController:
             try:
                 db.resources.update_or_insert(
                     db.resources.id == resource_id,
-                    status='error',
-                    updated_at=datetime.now()
+                    status="error",
+                    updated_at=datetime.now(),
                 )
                 db.provisioning_jobs.insert(
                     resource_id=resource_id,
-                    job_type='update_config',
-                    status='failed',
+                    job_type="update_config",
+                    status="failed",
                     started_at=datetime.now(),
                     completed_at=datetime.now(),
                     error_message=error_msg,
                     logs=error_msg,
-                    created_by=created_by_user_id
+                    created_by=created_by_user_id,
                 )
                 db.commit()
             except Exception as db_error:
@@ -793,6 +819,7 @@ class ProvisioningController:
         Raises:
             ValueError: If resource not found
         """
+        db = get_db()
         resource = db.resources[resource_id]
         if not resource:
             raise ValueError(f"Resource not found: {resource_id}")
@@ -807,17 +834,16 @@ class ProvisioningController:
         return ProvisioningStatus(
             resource_id=resource_id,
             status=resource.status,
-            namespace=resource.k8s_namespace or '',
-            k8s_resource_name=resource.k8s_resource_name or '',
+            namespace=resource.k8s_namespace or "",
+            k8s_resource_name=resource.k8s_resource_name or "",
             connection_info=connection_info,
             created_at=resource.created_at,
-            updated_at=resource.updated_at
+            updated_at=resource.updated_at,
         )
 
     # Private helper methods
 
     def _generate_resource_credentials(self, resource_type: str) -> Dict[str, str]:
-
         db = get_db()
         """Generate credentials for a resource type.
 
@@ -827,30 +853,32 @@ class ProvisioningController:
         Returns:
             Dictionary of generated credentials
         """
-        if resource_type == 'db-postgresql':
+        if resource_type == "db-postgresql":
             return {
-                'username': self.credential_generator.generate_username('postgres'),
-                'password': self.credential_generator.generate_password(),
-                'database': self.credential_generator.generate_username('db')
+                "username": self.credential_generator.generate_username("postgres"),
+                "password": self.credential_generator.generate_password(),
+                "database": self.credential_generator.generate_username("db"),
             }
-        elif resource_type in ['db-redis', 'db-valkey']:
+        elif resource_type in ["db-redis", "db-valkey"]:
+            return {"password": self.credential_generator.generate_password()}
+        elif resource_type == "db-mariadb":
             return {
-                'password': self.credential_generator.generate_password()
-            }
-        elif resource_type == 'db-mariadb':
-            return {
-                'username': self.credential_generator.generate_username('maria'),
-                'password': self.credential_generator.generate_password(),
-                'root_password': self.credential_generator.generate_password(),
-                'database': self.credential_generator.generate_username('db')
+                "username": self.credential_generator.generate_username("maria"),
+                "password": self.credential_generator.generate_password(),
+                "root_password": self.credential_generator.generate_password(),
+                "database": self.credential_generator.generate_username("db"),
             }
         else:
             raise ValueError(f"Unsupported resource type: {resource_type}")
 
-    def _build_template_context(self, resource: Any, resource_type_name: str,
-                                namespace: str, credentials: Dict[str, str],
-                                secret_name: str) -> Dict[str, Any]:
-
+    def _build_template_context(
+        self,
+        resource: Any,
+        resource_type_name: str,
+        namespace: str,
+        credentials: Dict[str, str],
+        secret_name: str,
+    ) -> Dict[str, Any]:
         db = get_db()
         """Build template context for Jinja2 rendering.
 
@@ -865,20 +893,22 @@ class ProvisioningController:
             Context dictionary for template rendering
         """
         # Extract resource type prefix
-        resource_prefix = resource_type_name.split('-')[1]  # e.g., 'postgresql' from 'db-postgresql'
+        resource_prefix = resource_type_name.split("-")[
+            1
+        ]  # e.g., 'postgresql' from 'db-postgresql'
 
         context = {
-            'namespace': namespace,
-            f'{resource_prefix}_name': resource.name,
-            f'{resource_prefix}_secret_name': secret_name,
-            f'{resource_prefix}_replicas': 1,
-            'storage_class': 'standard',
-            f'{resource_prefix}_storage_size': '10Gi',
+            "namespace": namespace,
+            f"{resource_prefix}_name": resource.name,
+            f"{resource_prefix}_secret_name": secret_name,
+            f"{resource_prefix}_replicas": 1,
+            "storage_class": "standard",
+            f"{resource_prefix}_storage_size": "10Gi",
         }
 
         # Add credentials to context
         for key, value in credentials.items():
-            context[f'{resource_prefix}_{key}'] = value
+            context[f"{resource_prefix}_{key}"] = value
 
         # Add resource config if present
         if resource.config:
@@ -889,9 +919,9 @@ class ProvisioningController:
 
         return context
 
-    def _wait_for_statefulset_ready(self, namespace: str, name: str,
-                                    timeout: int = 300) -> bool:
-
+    def _wait_for_statefulset_ready(
+        self, namespace: str, name: str, timeout: int = 300
+    ) -> bool:
         db = get_db()
         """Wait for a StatefulSet to become ready.
 
@@ -910,12 +940,14 @@ class ProvisioningController:
                 statefulset = self.k8s_client.get_statefulset(namespace, name)
 
                 # Check if ready replicas equals desired replicas
-                status = statefulset.get('status', {})
-                desired_replicas = status.get('replicas', 0)
-                ready_replicas = status.get('readyReplicas', 0)
+                status = statefulset.get("status", {})
+                desired_replicas = status.get("replicas", 0)
+                ready_replicas = status.get("readyReplicas", 0)
 
                 if desired_replicas > 0 and ready_replicas >= desired_replicas:
-                    logger.info(f"StatefulSet {name} is ready with {ready_replicas} replicas")
+                    logger.info(
+                        f"StatefulSet {name} is ready with {ready_replicas} replicas"
+                    )
                     return True
 
                 logger.debug(
@@ -927,12 +959,14 @@ class ProvisioningController:
 
             time.sleep(5)
 
-        logger.error(f"StatefulSet {name} did not become ready within {timeout} seconds")
+        logger.error(
+            f"StatefulSet {name} did not become ready within {timeout} seconds"
+        )
         return False
 
-    def _wait_for_statefulset_replicas(self, namespace: str, name: str,
-                                       replicas: int, timeout: int = 300) -> bool:
-
+    def _wait_for_statefulset_replicas(
+        self, namespace: str, name: str, replicas: int, timeout: int = 300
+    ) -> bool:
         db = get_db()
         """Wait for a StatefulSet to have the desired number of replicas ready.
 
@@ -950,11 +984,13 @@ class ProvisioningController:
         while time.time() - start_time < timeout:
             try:
                 statefulset = self.k8s_client.get_statefulset(namespace, name)
-                status = statefulset.get('status', {})
-                ready_replicas = status.get('readyReplicas', 0)
+                status = statefulset.get("status", {})
+                ready_replicas = status.get("readyReplicas", 0)
 
                 if ready_replicas >= replicas:
-                    logger.info(f"StatefulSet {name} has {ready_replicas} replicas ready")
+                    logger.info(
+                        f"StatefulSet {name} has {ready_replicas} replicas ready"
+                    )
                     return True
 
                 logger.debug(
@@ -966,11 +1002,12 @@ class ProvisioningController:
 
             time.sleep(5)
 
-        logger.error(f"StatefulSet {name} failed to reach {replicas} replicas within {timeout} seconds")
+        logger.error(
+            f"StatefulSet {name} failed to reach {replicas} replicas within {timeout} seconds"
+        )
         return False
 
     def _wait_for_namespace_deletion(self, namespace: str, timeout: int = 60) -> bool:
-
         db = get_db()
         """Wait for a namespace to be deleted.
 
@@ -998,7 +1035,6 @@ class ProvisioningController:
         return False
 
     def _get_service_endpoint(self, namespace: str, service_name: str) -> str:
-
         db = get_db()
         """Get the DNS endpoint for a Kubernetes service.
 
@@ -1018,9 +1054,9 @@ class ProvisioningController:
             # Return fallback endpoint
             return f"{service_name}.{namespace}.svc.cluster.local"
 
-    def _rollback_provisioning(self, namespace: Optional[str],
-                               statefulset_name: Optional[str]) -> None:
-
+    def _rollback_provisioning(
+        self, namespace: Optional[str], statefulset_name: Optional[str]
+    ) -> None:
         db = get_db()
         """Rollback provisioning by cleaning up Kubernetes resources.
 
@@ -1041,7 +1077,9 @@ class ProvisioningController:
                 try:
                     self.k8s_client.delete_statefulset(namespace, statefulset_name)
                 except Exception as e:
-                    logger.error(f"Failed to delete StatefulSet {statefulset_name}: {e}")
+                    logger.error(
+                        f"Failed to delete StatefulSet {statefulset_name}: {e}"
+                    )
 
         except Exception as e:
             logger.error(f"Rollback cleanup failed: {e}")

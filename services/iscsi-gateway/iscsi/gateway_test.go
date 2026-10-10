@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,9 +23,35 @@ type mockAPIRequest struct {
 	Body   map[string]interface{}
 }
 
-func newTestGatewayWithMockAPI(t *testing.T) (*iscsi.Gateway, *httptest.Server, *[]mockAPIRequest) {
+// mockAPIRequests is a thread-safe recorder for requests observed by the mock
+// Ceph-iSCSI API server. The mock handler runs in its own goroutine per
+// connection (net/http.Server), while assertions run on the test goroutine
+// after CreateTarget's background polling has had time to fire more requests
+// — the mutex guards that cross-goroutine read/write of the same slice.
+type mockAPIRequests struct {
+	mu  sync.Mutex
+	req []mockAPIRequest
+}
+
+func (m *mockAPIRequests) add(r mockAPIRequest) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.req = append(m.req, r)
+}
+
+// snapshot returns a copy of the recorded requests so callers can range over
+// it without holding the lock (and without racing further appends).
+func (m *mockAPIRequests) snapshot() []mockAPIRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]mockAPIRequest, len(m.req))
+	copy(out, m.req)
+	return out
+}
+
+func newTestGatewayWithMockAPI(t *testing.T) (*iscsi.Gateway, *httptest.Server, *mockAPIRequests) {
 	// Create a mock Ceph-iSCSI API server
-	var requests []mockAPIRequest
+	requests := &mockAPIRequests{}
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Record the request
@@ -33,7 +60,7 @@ func newTestGatewayWithMockAPI(t *testing.T) (*iscsi.Gateway, *httptest.Server, 
 		if len(body) > 0 {
 			json.Unmarshal(body, &bodyMap)
 		}
-		requests = append(requests, mockAPIRequest{
+		requests.add(mockAPIRequest{
 			Method: r.Method,
 			Path:   r.URL.Path,
 			Body:   bodyMap,
@@ -93,7 +120,7 @@ func newTestGatewayWithMockAPI(t *testing.T) (*iscsi.Gateway, *httptest.Server, 
 		Logger:            log.New(io.Discard, "", 0), // Discard logs during tests
 	})
 
-	return gw, mockServer, &requests
+	return gw, mockServer, requests
 }
 
 func newTestGateway() *iscsi.Gateway {
@@ -377,7 +404,7 @@ func TestCreateTargetWithInitiatorAndCHAP(t *testing.T) {
 	// Verify ACL and CHAP endpoints were called
 	clientACLFound := false
 	chapAuthFound := false
-	for _, req := range *requests {
+	for _, req := range requests.snapshot() {
 		if req.Method == http.MethodPut && strings.Contains(req.Path, "/api/client/") && !strings.Contains(req.Path, "clientauth") {
 			clientACLFound = true
 		}
@@ -433,7 +460,7 @@ func TestCreateTargetWithInitiatorNoCHAP(t *testing.T) {
 	// Verify ACL endpoint was called but not CHAP
 	clientACLFound := false
 	chapAuthFound := false
-	for _, req := range *requests {
+	for _, req := range requests.snapshot() {
 		if req.Method == http.MethodPut && strings.Contains(req.Path, "/api/client/") && !strings.Contains(req.Path, "clientauth") {
 			clientACLFound = true
 		}

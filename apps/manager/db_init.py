@@ -17,16 +17,17 @@ Environment Variables:
     DB_PASSWORD: Database password (required)
 """
 
+import logging
 import os
 import sys
-import logging
 from datetime import datetime
 
 try:
     from flask import Flask
-    from flask_sqlalchemy import SQLAlchemy
     from flask_security import Security, SQLAlchemyUserDatastore, hash_password
-    from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum as SQLEnum
+    from flask_sqlalchemy import SQLAlchemy
+    from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+    from sqlalchemy import Enum as SQLEnum
     from sqlalchemy.orm import relationship
 except ImportError as e:
     print(f"Error: Required packages not installed: {e}")
@@ -48,8 +49,7 @@ except ImportError:
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -58,11 +58,11 @@ class DatabaseConfig:
     """Database configuration from environment variables"""
 
     def __init__(self):
-        self.host = os.getenv('DB_HOST', 'localhost')
-        self.port = os.getenv('DB_PORT', '5432')
-        self.name = os.getenv('DB_NAME', 'manager')
-        self.user = os.getenv('DB_USER', 'postgres')
-        self.password = os.getenv('DB_PASSWORD', '')
+        self.host = os.getenv("DB_HOST", "localhost")
+        self.port = os.getenv("DB_PORT", "5432")
+        self.name = os.getenv("DB_NAME", "manager")
+        self.user = os.getenv("DB_USER", "postgres")
+        self.password = os.getenv("DB_PASSWORD", "")
 
         if not self.password:
             raise ValueError("DB_PASSWORD environment variable is required")
@@ -81,9 +81,9 @@ db_config = DatabaseConfig()
 
 # Flask app initialization
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = db_config.connection_string
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change-me-in-production')
+app.config["SQLALCHEMY_DATABASE_URI"] = db_config.connection_string
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "change-me-in-production")
 
 db = SQLAlchemy(app)
 
@@ -92,9 +92,11 @@ db = SQLAlchemy(app)
 # Database Models
 # ============================================================================
 
+
 class Role(db.Model):
     """User role model for Flask-Security-Too"""
-    __tablename__ = 'role'
+
+    __tablename__ = "role"
 
     id = Column(Integer, primary_key=True)
     name = Column(String(80), unique=True, nullable=False)
@@ -102,15 +104,16 @@ class Role(db.Model):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    users = relationship('User', secondary='roles_users', backref='roles')
+    users = relationship("User", secondary="roles_users", backref="roles")
 
     def __repr__(self):
-        return f'<Role {self.name}>'
+        return f"<Role {self.name}>"
 
 
 class User(db.Model):
     """User model for Flask-Security-Too"""
-    __tablename__ = 'user'
+
+    __tablename__ = "user"
 
     id = Column(Integer, primary_key=True)
     email = Column(String(255), unique=True, nullable=False)
@@ -122,24 +125,26 @@ class User(db.Model):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    role_ids = relationship('Role', secondary='roles_users')
+    role_ids = relationship("Role", secondary="roles_users")
 
     def __repr__(self):
-        return f'<User {self.email}>'
+        return f"<User {self.email}>"
 
 
 class RolesUsers(db.Model):
     """Association table for User-Role relationships"""
-    __tablename__ = 'roles_users'
+
+    __tablename__ = "roles_users"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    role_id = Column(Integer, ForeignKey('role.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    role_id = Column(Integer, ForeignKey("role.id"), nullable=False)
 
 
 class Team(db.Model):
     """Team model"""
-    __tablename__ = 'team'
+
+    __tablename__ = "team"
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
@@ -149,12 +154,13 @@ class Team(db.Model):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f'<Team {self.name}>'
+        return f"<Team {self.name}>"
 
 
 class ResourceType(db.Model):
     """Supported resource types"""
-    __tablename__ = 'resource_type'
+
+    __tablename__ = "resource_type"
 
     id = Column(Integer, primary_key=True)
     category = Column(String(50), nullable=False)  # storage, database, bigdata
@@ -163,12 +169,13 @@ class ResourceType(db.Model):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):
-        return f'<ResourceType {self.type_name}>'
+        return f"<ResourceType {self.type_name}>"
 
 
 # ============================================================================
 # Database Initialization Functions
 # ============================================================================
+
 
 def create_tables():
     """Create all database tables"""
@@ -187,20 +194,22 @@ def create_default_team():
     logger.info("Creating default 'Global' team...")
     try:
         # Check if Global team already exists
-        existing_team = Team.query.filter_by(name='Global', is_global=True).first()
+        existing_team = Team.query.filter_by(name="Global", is_global=True).first()
         if existing_team:
             logger.info("Global team already exists (id=%d)", existing_team.id)
             return True
 
         # Create new Global team
         global_team = Team(
-            name='Global',
-            description='Global default team for all resources',
-            is_global=True
+            name="Global",
+            description="Global default team for all resources",
+            is_global=True,
         )
         db.session.add(global_team)
         db.session.commit()
-        logger.info("Default 'Global' team created successfully (id=%d)", global_team.id)
+        logger.info(
+            "Default 'Global' team created successfully (id=%d)", global_team.id
+        )
         return True
     except Exception as e:
         logger.error(f"Failed to create default team: {e}")
@@ -214,24 +223,22 @@ def seed_resource_types():
 
     resource_types = [
         # Storage types
-        ('storage', 'storage-iscsi', 'iSCSI Storage'),
-        ('storage', 'storage-nfs', 'NFS Network File System'),
-        ('storage', 'storage-scsi', 'SCSI Storage'),
-        ('storage', 'storage-sas', 'Serial Attached SCSI'),
-        ('storage', 'storage-san', 'Storage Area Network'),
-        ('storage', 'storage-ceph', 'Ceph Distributed Storage'),
-
+        ("storage", "storage-iscsi", "iSCSI Storage"),
+        ("storage", "storage-nfs", "NFS Network File System"),
+        ("storage", "storage-scsi", "SCSI Storage"),
+        ("storage", "storage-sas", "Serial Attached SCSI"),
+        ("storage", "storage-san", "Storage Area Network"),
+        ("storage", "storage-ceph", "Ceph Distributed Storage"),
         # Database types
-        ('database', 'db-mariadb', 'MariaDB Database'),
-        ('database', 'db-galera', 'Galera Cluster'),
-        ('database', 'db-postgresql', 'PostgreSQL Database'),
-        ('database', 'db-redis', 'Redis Cache'),
-        ('database', 'db-valkey', 'Valkey Cache'),
-        ('database', 'db-sqlite', 'SQLite Database'),
-
+        ("database", "db-mariadb", "MariaDB Database"),
+        ("database", "db-galera", "Galera Cluster"),
+        ("database", "db-postgresql", "PostgreSQL Database"),
+        ("database", "db-redis", "Redis Cache"),
+        ("database", "db-valkey", "Valkey Cache"),
+        ("database", "db-sqlite", "SQLite Database"),
         # Big Data types
-        ('bigdata', 'bigdata-hadoop', 'Apache Hadoop'),
-        ('bigdata', 'bigdata-trino', 'Trino Query Engine'),
+        ("bigdata", "bigdata-hadoop", "Apache Hadoop"),
+        ("bigdata", "bigdata-trino", "Trino Query Engine"),
     ]
 
     try:
@@ -239,14 +246,14 @@ def seed_resource_types():
             # Check if resource type already exists
             existing_type = ResourceType.query.filter_by(type_name=type_name).first()
             if existing_type:
-                logger.debug(f"Resource type '{type_name}' already exists (id={existing_type.id})")
+                logger.debug(
+                    f"Resource type '{type_name}' already exists (id={existing_type.id})"
+                )
                 continue
 
             # Create new resource type
             resource_type = ResourceType(
-                category=category,
-                type_name=type_name,
-                description=description
+                category=category, type_name=type_name, description=description
             )
             db.session.add(resource_type)
 
@@ -271,14 +278,14 @@ def verify_database():
         teams_count = Team.query.count()
         resource_types_count = ResourceType.query.count()
 
-        logger.info(f"Database verification:")
+        logger.info("Database verification:")
         logger.info(f"  - Roles: {roles_count}")
         logger.info(f"  - Users: {users_count}")
         logger.info(f"  - Teams: {teams_count}")
         logger.info(f"  - Resource Types: {resource_types_count}")
 
         # Verify Global team exists
-        global_team = Team.query.filter_by(name='Global', is_global=True).first()
+        global_team = Team.query.filter_by(name="Global", is_global=True).first()
         if global_team:
             logger.info(f"  - Global team verified (id={global_team.id})")
         else:
@@ -292,14 +299,16 @@ def verify_database():
 
 def print_success_summary():
     """Print summary of successful initialization"""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DATABASE INITIALIZATION COMPLETED SUCCESSFULLY")
-    print("="*70)
+    print("=" * 70)
     print(f"\nDatabase Connection: {db_config.host}:{db_config.port}/{db_config.name}")
-    print(f"Connection String: postgresql://{db_config.user}:***@{db_config.host}:{db_config.port}/{db_config.name}")
+    print(
+        f"Connection String: postgresql://{db_config.user}:***@{db_config.host}:{db_config.port}/{db_config.name}"
+    )
     print("\nInitialization Summary:")
-    print(f"  ✓ Database tables created")
-    print(f"  ✓ Default 'Global' team created")
+    print("  ✓ Database tables created")
+    print("  ✓ Default 'Global' team created")
     print(f"  ✓ Resource types seeded ({ResourceType.query.count()} types)")
     print(f"  ✓ Total teams: {Team.query.count()}")
     print(f"  ✓ Total users: {User.query.count()}")
@@ -308,13 +317,15 @@ def print_success_summary():
     print("  1. All future database operations should use PyDAL")
     print("  2. Do NOT use SQLAlchemy directly after initial setup")
     print("  3. Configure PyDAL models in your application")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
 
 def main():
     """Main initialization function"""
     logger.info("Starting database initialization...")
-    logger.info(f"Connecting to PostgreSQL: {db_config.host}:{db_config.port}/{db_config.name}")
+    logger.info(
+        f"Connecting to PostgreSQL: {db_config.host}:{db_config.port}/{db_config.name}"
+    )
 
     with app.app_context():
         try:
@@ -348,7 +359,7 @@ def main():
             return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         success = main()
         sys.exit(0 if success else 1)

@@ -9,9 +9,8 @@ import os
 from typing import Any
 
 from penguin_dal import AsyncDB
-
-from store.store import MemoryOperationStore, OperationStore
 from store.sql_store import SQLOperationStore
+from store.store import MemoryOperationStore, OperationStore
 
 
 async def create_operation_store() -> OperationStore:

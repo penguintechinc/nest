@@ -5,34 +5,36 @@ Provides configuration updates, user synchronization, backup/restore operations,
 and statistics collection for resources in partial or monitor_only lifecycle modes.
 """
 
-import logging
 import json
+import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from penguin_dal.quart_ext import get_db
-from lib.resource_connectors.postgresql import PostgreSQLConnector
-from lib.resource_connectors.mariadb import MariaDBConnector
-from lib.resource_connectors.redis import RedisConnector
 from lib.resource_connectors.ceph import CephConnector
+from lib.resource_connectors.mariadb import MariaDBConnector
+from lib.resource_connectors.postgresql import PostgreSQLConnector
+from lib.resource_connectors.redis import RedisConnector
 from lib.resource_connectors.san import SANConnector
-
+from penguin_dal.quart_ext import get_db
 
 logger = logging.getLogger(__name__)
 
 
 class ExternalOpsControllerError(Exception):
     """Base exception for external operations controller errors."""
+
     pass
 
 
 class InvalidResourceError(ExternalOpsControllerError):
     """Resource validation errors."""
+
     pass
 
 
 class ConnectorError(ExternalOpsControllerError):
     """Connector operation errors."""
+
     pass
 
 
@@ -43,14 +45,14 @@ class ExternalOpsController:
     user synchronization, backup/restore, and statistics collection.
     """
 
-    SUPPORTED_LIFECYCLE_MODES = ['partial', 'monitor_only']
+    SUPPORTED_LIFECYCLE_MODES = ["partial", "monitor_only"]
 
     CONNECTOR_MAP = {
-        'db-postgresql': PostgreSQLConnector,
-        'db-mariadb': MariaDBConnector,
-        'db-redis': RedisConnector,
-        'storage-ceph': CephConnector,
-        'storage-san': SANConnector,
+        "db-postgresql": PostgreSQLConnector,
+        "db-mariadb": MariaDBConnector,
+        "db-redis": RedisConnector,
+        "storage-ceph": CephConnector,
+        "storage-san": SANConnector,
     }
 
     @staticmethod
@@ -102,7 +104,10 @@ class ExternalOpsController:
         Raises:
             InvalidResourceError: If lifecycle mode not supported
         """
-        if resource.lifecycle_mode not in ExternalOpsController.SUPPORTED_LIFECYCLE_MODES:
+        if (
+            resource.lifecycle_mode
+            not in ExternalOpsController.SUPPORTED_LIFECYCLE_MODES
+        ):
             raise InvalidResourceError(
                 f"Resource lifecycle mode '{resource.lifecycle_mode}' does not support "
                 "external operations. Only 'partial' and 'monitor_only' modes supported."
@@ -131,8 +136,7 @@ class ExternalOpsController:
         return connector_class
 
     @staticmethod
-    def _initialize_connector(connector_class: type,
-                             resource: Dict[str, Any]) -> Any:
+    def _initialize_connector(connector_class: type, resource: Dict[str, Any]) -> Any:
         db = get_db()
         """Initialize connector instance for resource.
 
@@ -158,8 +162,7 @@ class ExternalOpsController:
                     credentials = {}
 
             connector = connector_class(
-                connection_info=connection_info,
-                credentials=credentials
+                connection_info=connection_info, credentials=credentials
             )
             return connector
 
@@ -169,8 +172,13 @@ class ExternalOpsController:
             )
 
     @staticmethod
-    def _create_audit_log(resource_id: int, action: str, details: Dict[str, Any],
-                         user_id: Optional[int] = None, team_id: Optional[int] = None) -> int:
+    def _create_audit_log(
+        resource_id: int,
+        action: str,
+        details: Dict[str, Any],
+        user_id: Optional[int] = None,
+        team_id: Optional[int] = None,
+    ) -> int:
         db = get_db()
         """Create audit log entry for action.
 
@@ -192,22 +200,28 @@ class ExternalOpsController:
             audit_id = db.audit_logs.insert(
                 user_id=user_id,
                 action=action,
-                resource_type='resource',
+                resource_type="resource",
                 resource_id=resource_id,
                 team_id=team_id,
                 details=json.dumps(details) if isinstance(details, dict) else details,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.utcnow(),
             )
             db.commit()
-            logger.info(f"Created audit log entry {audit_id} for action '{action}' on resource {resource_id}")
+            logger.info(
+                f"Created audit log entry {audit_id} for action '{action}' on resource {resource_id}"
+            )
             return audit_id
 
         except Exception as e:
             logger.error(f"Failed to create audit log for action '{action}': {e}")
             return None
 
-    def update_resource_config(self, resource_id: int, config_params: Dict[str, Any],
-                              user_id: Optional[int] = None) -> bool:
+    def update_resource_config(
+        self,
+        resource_id: int,
+        config_params: Dict[str, Any],
+        user_id: Optional[int] = None,
+    ) -> bool:
         """Update resource configuration parameters.
 
         Workflow:
@@ -230,6 +244,7 @@ class ExternalOpsController:
             InvalidResourceError: If resource validation fails
             ConnectorError: If connector operation fails
         """
+        db = get_db()
         try:
             # Load and validate resource
             resource = self._load_resource(resource_id)
@@ -262,31 +277,31 @@ class ExternalOpsController:
             current_config.update(config_params)
 
             db.resources[resource_id] = dict(
-                config=json.dumps(current_config),
-                updated_at=datetime.utcnow()
+                config=json.dumps(current_config), updated_at=datetime.utcnow()
             )
             db.commit()
 
             # Create audit log
             self._create_audit_log(
                 resource_id=resource_id,
-                action='update_config',
-                details={
-                    'config_params': config_params,
-                    'status': 'completed'
-                },
+                action="update_config",
+                details={"config_params": config_params, "status": "completed"},
                 user_id=user_id,
-                team_id=resource.team_id
+                team_id=resource.team_id,
             )
 
-            logger.info(f"Successfully updated configuration for resource {resource_id}")
+            logger.info(
+                f"Successfully updated configuration for resource {resource_id}"
+            )
             return True
 
         except (InvalidResourceError, ConnectorError) as e:
             logger.error(f"Failed to update resource config: {e}")
             raise
 
-    def update_resource_users(self, resource_id: int, user_id: Optional[int] = None) -> bool:
+    def update_resource_users(
+        self, resource_id: int, user_id: Optional[int] = None
+    ) -> bool:
         """Synchronize all users to resource.
 
         Syncs resource_users entries to the actual resource by calling
@@ -303,6 +318,7 @@ class ExternalOpsController:
             InvalidResourceError: If resource validation fails
             ConnectorError: If sync operation fails
         """
+        db = get_db()
         try:
             # Load and validate resource
             resource = self._load_resource(resource_id)
@@ -330,16 +346,18 @@ class ExternalOpsController:
                 try:
                     # Update sync status to 'syncing'
                     db.resource_users[res_user.id] = dict(
-                        sync_status='syncing',
-                        updated_at=datetime.utcnow()
+                        sync_status="syncing", updated_at=datetime.utcnow()
                     )
                     db.commit()
 
                     # Sync user to resource
-                    if hasattr(connector, 'create_user') and res_user.sync_status == 'pending':
+                    if (
+                        hasattr(connector, "create_user")
+                        and res_user.sync_status == "pending"
+                    ):
                         # Decrypt password if needed
                         password = res_user.password_hash
-                        if isinstance(password, str) and password.startswith('fernet:'):
+                        if isinstance(password, str) and password.startswith("fernet:"):
                             # Would need decryption service here
                             pass
 
@@ -351,30 +369,30 @@ class ExternalOpsController:
                                 roles = []
 
                         connector.create_user(
-                            username=res_user.username,
-                            password=password,
-                            roles=roles
+                            username=res_user.username, password=password, roles=roles
                         )
 
                     # Mark as synced
                     db.resource_users[res_user.id] = dict(
-                        sync_status='synced',
+                        sync_status="synced",
                         last_synced_at=datetime.utcnow(),
                         sync_error=None,
-                        updated_at=datetime.utcnow()
+                        updated_at=datetime.utcnow(),
                     )
                     db.commit()
                     synced_count += 1
 
                 except Exception as e:
                     error_msg = str(e)
-                    logger.error(f"Failed to sync user {res_user.username} to resource {resource_id}: {e}")
+                    logger.error(
+                        f"Failed to sync user {res_user.username} to resource {resource_id}: {e}"
+                    )
 
                     # Mark as error
                     db.resource_users[res_user.id] = dict(
-                        sync_status='error',
+                        sync_status="error",
                         sync_error=error_msg,
-                        updated_at=datetime.utcnow()
+                        updated_at=datetime.utcnow(),
                     )
                     db.commit()
                     sync_errors.append(f"{res_user.username}: {error_msg}")
@@ -382,26 +400,33 @@ class ExternalOpsController:
             # Create audit log
             self._create_audit_log(
                 resource_id=resource_id,
-                action='sync_users',
+                action="sync_users",
                 details={
-                    'synced_count': synced_count,
-                    'total_users': len(resource_users),
-                    'errors': sync_errors,
-                    'status': 'completed'
+                    "synced_count": synced_count,
+                    "total_users": len(resource_users),
+                    "errors": sync_errors,
+                    "status": "completed",
                 },
                 user_id=user_id,
-                team_id=resource.team_id
+                team_id=resource.team_id,
             )
 
-            logger.info(f"Synced {synced_count}/{len(resource_users)} users to resource {resource_id}")
+            logger.info(
+                f"Synced {synced_count}/{len(resource_users)} users to resource {resource_id}"
+            )
             return len(sync_errors) == 0
 
         except (InvalidResourceError, ConnectorError) as e:
             logger.error(f"Failed to sync users: {e}")
             raise
 
-    def trigger_backup(self, resource_id: int, backup_type: str = 'full',
-                      backup_location: str = None, user_id: Optional[int] = None) -> int:
+    def trigger_backup(
+        self,
+        resource_id: int,
+        backup_type: str = "full",
+        backup_location: str = None,
+        user_id: Optional[int] = None,
+    ) -> int:
         """Trigger backup operation on resource.
 
         Workflow:
@@ -425,6 +450,7 @@ class ExternalOpsController:
             InvalidResourceError: If resource validation fails
             ConnectorError: If backup operation fails
         """
+        db = get_db()
         try:
             # Load and validate resource
             resource = self._load_resource(resource_id)
@@ -446,60 +472,62 @@ class ExternalOpsController:
             job_id = db.backup_jobs.insert(
                 resource_id=resource_id,
                 job_type=backup_type,
-                status='pending',
+                status="pending",
                 backup_location=backup_location,
                 created_by=user_id,
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow(),
             )
             db.commit()
 
             try:
                 # Update status to running
                 db.backup_jobs[job_id] = dict(
-                    status='running',
-                    started_at=datetime.utcnow()
+                    status="running", started_at=datetime.utcnow()
                 )
                 db.commit()
 
                 # Execute backup
                 backup_path = connector.trigger_backup(
-                    backup_location=backup_location or f'/backups/{resource_id}',
+                    backup_location=backup_location or f"/backups/{resource_id}",
                     database=None,
-                    format_type='plain',
-                    verbose=True
+                    format_type="plain",
+                    verbose=True,
                 )
 
                 # Get backup size
                 import os
+
                 backup_size = 0
                 if os.path.exists(backup_path):
                     backup_size = os.path.getsize(backup_path)
 
                 # Update job as completed
                 db.backup_jobs[job_id] = dict(
-                    status='completed',
+                    status="completed",
                     backup_location=backup_path,
                     backup_size_bytes=backup_size,
-                    completed_at=datetime.utcnow()
+                    completed_at=datetime.utcnow(),
                 )
                 db.commit()
 
                 # Create audit log
                 self._create_audit_log(
                     resource_id=resource_id,
-                    action='trigger_backup',
+                    action="trigger_backup",
                     details={
-                        'backup_type': backup_type,
-                        'backup_location': backup_path,
-                        'backup_size_bytes': backup_size,
-                        'job_id': job_id,
-                        'status': 'completed'
+                        "backup_type": backup_type,
+                        "backup_location": backup_path,
+                        "backup_size_bytes": backup_size,
+                        "job_id": job_id,
+                        "status": "completed",
                     },
                     user_id=user_id,
-                    team_id=resource.team_id
+                    team_id=resource.team_id,
                 )
 
-                logger.info(f"Successfully completed backup job {job_id} for resource {resource_id}")
+                logger.info(
+                    f"Successfully completed backup job {job_id} for resource {resource_id}"
+                )
 
             except Exception as e:
                 error_msg = str(e)
@@ -507,24 +535,24 @@ class ExternalOpsController:
 
                 # Update job as failed
                 db.backup_jobs[job_id] = dict(
-                    status='failed',
+                    status="failed",
                     error_message=error_msg,
-                    completed_at=datetime.utcnow()
+                    completed_at=datetime.utcnow(),
                 )
                 db.commit()
 
                 # Create audit log for failure
                 self._create_audit_log(
                     resource_id=resource_id,
-                    action='trigger_backup',
+                    action="trigger_backup",
                     details={
-                        'backup_type': backup_type,
-                        'job_id': job_id,
-                        'status': 'failed',
-                        'error': error_msg
+                        "backup_type": backup_type,
+                        "job_id": job_id,
+                        "status": "failed",
+                        "error": error_msg,
                     },
                     user_id=user_id,
-                    team_id=resource.team_id
+                    team_id=resource.team_id,
                 )
 
                 raise ConnectorError(f"Backup operation failed: {error_msg}")
@@ -535,8 +563,9 @@ class ExternalOpsController:
             logger.error(f"Failed to trigger backup: {e}")
             raise
 
-    def restore_backup(self, resource_id: int, backup_location: str,
-                      user_id: Optional[int] = None) -> int:
+    def restore_backup(
+        self, resource_id: int, backup_location: str, user_id: Optional[int] = None
+    ) -> int:
         """Restore resource from backup.
 
         Workflow:
@@ -559,6 +588,7 @@ class ExternalOpsController:
             InvalidResourceError: If resource validation fails
             ConnectorError: If restore operation fails
         """
+        db = get_db()
         try:
             # Load and validate resource
             resource = self._load_resource(resource_id)
@@ -579,19 +609,18 @@ class ExternalOpsController:
             # Create restore job record
             job_id = db.backup_jobs.insert(
                 resource_id=resource_id,
-                job_type='restore',
-                status='pending',
+                job_type="restore",
+                status="pending",
                 backup_location=backup_location,
                 created_by=user_id,
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow(),
             )
             db.commit()
 
             try:
                 # Update status to running
                 db.backup_jobs[job_id] = dict(
-                    status='running',
-                    started_at=datetime.utcnow()
+                    status="running", started_at=datetime.utcnow()
                 )
                 db.commit()
 
@@ -601,30 +630,31 @@ class ExternalOpsController:
                     database=None,
                     clean=True,
                     if_exists=True,
-                    verbose=True
+                    verbose=True,
                 )
 
                 # Update job as completed
                 db.backup_jobs[job_id] = dict(
-                    status='completed',
-                    completed_at=datetime.utcnow()
+                    status="completed", completed_at=datetime.utcnow()
                 )
                 db.commit()
 
                 # Create audit log
                 self._create_audit_log(
                     resource_id=resource_id,
-                    action='restore_backup',
+                    action="restore_backup",
                     details={
-                        'backup_location': backup_location,
-                        'job_id': job_id,
-                        'status': 'completed'
+                        "backup_location": backup_location,
+                        "job_id": job_id,
+                        "status": "completed",
                     },
                     user_id=user_id,
-                    team_id=resource.team_id
+                    team_id=resource.team_id,
                 )
 
-                logger.info(f"Successfully completed restore job {job_id} for resource {resource_id}")
+                logger.info(
+                    f"Successfully completed restore job {job_id} for resource {resource_id}"
+                )
 
             except Exception as e:
                 error_msg = str(e)
@@ -632,24 +662,24 @@ class ExternalOpsController:
 
                 # Update job as failed
                 db.backup_jobs[job_id] = dict(
-                    status='failed',
+                    status="failed",
                     error_message=error_msg,
-                    completed_at=datetime.utcnow()
+                    completed_at=datetime.utcnow(),
                 )
                 db.commit()
 
                 # Create audit log for failure
                 self._create_audit_log(
                     resource_id=resource_id,
-                    action='restore_backup',
+                    action="restore_backup",
                     details={
-                        'backup_location': backup_location,
-                        'job_id': job_id,
-                        'status': 'failed',
-                        'error': error_msg
+                        "backup_location": backup_location,
+                        "job_id": job_id,
+                        "status": "failed",
+                        "error": error_msg,
                     },
                     user_id=user_id,
-                    team_id=resource.team_id
+                    team_id=resource.team_id,
                 )
 
                 raise ConnectorError(f"Restore operation failed: {error_msg}")
@@ -660,8 +690,9 @@ class ExternalOpsController:
             logger.error(f"Failed to restore backup: {e}")
             raise
 
-    def collect_resource_stats(self, resource_id: int,
-                              user_id: Optional[int] = None) -> Dict[str, Any]:
+    def collect_resource_stats(
+        self, resource_id: int, user_id: Optional[int] = None
+    ) -> Dict[str, Any]:
         """Collect resource statistics and assess risk level.
 
         Workflow:
@@ -689,6 +720,7 @@ class ExternalOpsController:
             InvalidResourceError: If resource not found
             ConnectorError: If stats collection fails
         """
+        db = get_db()
         try:
             # Load resource
             resource = self._load_resource(resource_id)
@@ -705,7 +737,9 @@ class ExternalOpsController:
             metrics = connector.collect_stats()
 
             # Calculate risk level
-            risk_level, risk_factors = self._calculate_risk_level(metrics, resource_type.name)
+            risk_level, risk_factors = self._calculate_risk_level(
+                metrics, resource_type.name
+            )
 
             # Insert into resource_stats
             stats_id = db.resource_stats.insert(
@@ -713,32 +747,34 @@ class ExternalOpsController:
                 timestamp=datetime.utcnow(),
                 metrics=json.dumps(metrics),
                 risk_level=risk_level,
-                risk_factors=json.dumps(risk_factors)
+                risk_factors=json.dumps(risk_factors),
             )
             db.commit()
 
             # Create audit log if risk level is high or critical
-            if risk_level in ['high', 'critical']:
+            if risk_level in ["high", "critical"]:
                 self._create_audit_log(
                     resource_id=resource_id,
-                    action='collect_stats',
+                    action="collect_stats",
                     details={
-                        'risk_level': risk_level,
-                        'risk_factors': risk_factors,
-                        'stats_id': stats_id
+                        "risk_level": risk_level,
+                        "risk_factors": risk_factors,
+                        "stats_id": stats_id,
                     },
                     user_id=user_id,
-                    team_id=resource.team_id
+                    team_id=resource.team_id,
                 )
 
-            logger.info(f"Collected stats for resource {resource_id} - Risk level: {risk_level}")
+            logger.info(
+                f"Collected stats for resource {resource_id} - Risk level: {risk_level}"
+            )
 
             return {
-                'stats_id': stats_id,
-                'timestamp': datetime.utcnow().isoformat(),
-                'metrics': metrics,
-                'risk_level': risk_level,
-                'risk_factors': risk_factors
+                "stats_id": stats_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "metrics": metrics,
+                "risk_level": risk_level,
+                "risk_factors": risk_factors,
             }
 
         except (InvalidResourceError, ConnectorError) as e:
@@ -746,8 +782,9 @@ class ExternalOpsController:
             raise
 
     @staticmethod
-    def _calculate_risk_level(metrics: Dict[str, Any],
-                             resource_type: str) -> Tuple[str, List[str]]:
+    def _calculate_risk_level(
+        metrics: Dict[str, Any], resource_type: str
+    ) -> Tuple[str, List[str]]:
         db = get_db()
         """Calculate risk level based on metrics.
 
@@ -760,57 +797,59 @@ class ExternalOpsController:
             risk_level: 'low', 'medium', 'high', or 'critical'
         """
         risk_factors = []
-        max_risk = 'low'
+        max_risk = "low"
 
         # Check disk usage (for databases and storage)
-        if 'disk_usage_percent' in metrics:
-            usage = metrics['disk_usage_percent']
+        if "disk_usage_percent" in metrics:
+            usage = metrics["disk_usage_percent"]
             if usage > 95:
                 risk_factors.append(f"Disk usage critical: {usage}%")
-                max_risk = 'critical'
+                max_risk = "critical"
             elif usage > 85:
                 risk_factors.append(f"Disk usage high: {usage}%")
-                if max_risk != 'critical':
-                    max_risk = 'high'
+                if max_risk != "critical":
+                    max_risk = "high"
 
         # Check memory usage (for databases)
-        if 'memory_usage_percent' in metrics:
-            usage = metrics['memory_usage_percent']
+        if "memory_usage_percent" in metrics:
+            usage = metrics["memory_usage_percent"]
             if usage > 90:
                 risk_factors.append(f"Memory usage high: {usage}%")
-                if max_risk not in ['critical', 'high']:
-                    max_risk = 'high'
+                if max_risk not in ["critical", "high"]:
+                    max_risk = "high"
 
         # Check connection saturation (for databases)
-        if 'connections' in metrics:
-            conn_info = metrics['connections']
+        if "connections" in metrics:
+            conn_info = metrics["connections"]
             if isinstance(conn_info, dict):
-                active = conn_info.get('active', 0)
-                total = conn_info.get('total', 1)
+                active = conn_info.get("active", 0)
+                total = conn_info.get("total", 1)
                 if total > 0:
                     saturation = (active / total) * 100
                     if saturation > 80:
                         risk_factors.append(f"Connection saturation: {saturation}%")
-                        if max_risk == 'low':
-                            max_risk = 'medium'
+                        if max_risk == "low":
+                            max_risk = "medium"
 
         # Check temp space (for databases)
-        if 'temp_files' in metrics:
-            temp_info = metrics['temp_files']
+        if "temp_files" in metrics:
+            temp_info = metrics["temp_files"]
             if isinstance(temp_info, dict):
-                temp_size = temp_info.get('size_bytes', 0)
+                temp_size = temp_info.get("size_bytes", 0)
                 if temp_size > 1073741824:  # > 1GB
-                    risk_factors.append(f"Temporary space usage: {temp_size / 1073741824:.2f}GB")
-                    if max_risk == 'low':
-                        max_risk = 'medium'
+                    risk_factors.append(
+                        f"Temporary space usage: {temp_size / 1073741824:.2f}GB"
+                    )
+                    if max_risk == "low":
+                        max_risk = "medium"
 
         # Check replication lag (for databases)
-        if 'replication_lag_seconds' in metrics:
-            lag = metrics['replication_lag_seconds']
+        if "replication_lag_seconds" in metrics:
+            lag = metrics["replication_lag_seconds"]
             if lag is not None and lag > 3600:  # > 1 hour
                 risk_factors.append(f"Replication lag: {lag}s")
-                if max_risk == 'low':
-                    max_risk = 'medium'
+                if max_risk == "low":
+                    max_risk = "medium"
 
         return max_risk, risk_factors
 
@@ -847,7 +886,9 @@ class ExternalOpsController:
             logger.error(f"Connection test failed: {e}")
             raise
 
-    def reload_configuration(self, resource_id: int, user_id: Optional[int] = None) -> bool:
+    def reload_configuration(
+        self, resource_id: int, user_id: Optional[int] = None
+    ) -> bool:
         """Reload configuration on resource without full restart.
 
         Args:
@@ -874,7 +915,7 @@ class ExternalOpsController:
             connector = self._initialize_connector(connector_class, resource)
 
             # Call reload_config if available
-            if hasattr(connector, 'reload_config'):
+            if hasattr(connector, "reload_config"):
                 connector.reload_config()
             else:
                 raise ConnectorError(
@@ -884,15 +925,15 @@ class ExternalOpsController:
             # Create audit log
             self._create_audit_log(
                 resource_id=resource_id,
-                action='reload_config',
-                details={
-                    'status': 'completed'
-                },
+                action="reload_config",
+                details={"status": "completed"},
                 user_id=user_id,
-                team_id=resource.team_id
+                team_id=resource.team_id,
             )
 
-            logger.info(f"Successfully reloaded configuration for resource {resource_id}")
+            logger.info(
+                f"Successfully reloaded configuration for resource {resource_id}"
+            )
             return True
 
         except (InvalidResourceError, ConnectorError) as e:

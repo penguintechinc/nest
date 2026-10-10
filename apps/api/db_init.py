@@ -2,9 +2,8 @@
 
 import os
 
-from sqlalchemy import create_engine
-
 from db_models import Base
+from sqlalchemy import create_engine
 
 
 def init_db() -> None:

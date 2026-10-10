@@ -2475,3 +2475,49 @@ func TestTenantReconciler_UpdateError(t *testing.T) {
 		t.Error("expected error from Reconcile when Update fails, got nil")
 	}
 }
+
+// TestReconcileRejectsTypeCategoryMismatch verifies the reconcile-time
+// defense-in-depth guard: a DataResource whose spec.type is not a member of
+// its declared spec.category is rejected before any provisioner runs, even
+// though the CRD CEL rule would normally catch this at admission.
+//
+// Type "object" is used (rather than an unrecognized type string) because it
+// is a real switch-dispatch case: absent the guard, reconcileObject runs to
+// completion with a nil error and leaves the phase at Provisioning (see
+// TestDataResourceReconciler_ReconcilePreProvisioningPhaseRetries) — so this
+// test only passes because the category guard fires, not because the type
+// happens to be unsupported.
+func TestReconcileRejectsTypeCategoryMismatch(t *testing.T) {
+	scheme := newTestScheme(t)
+	dr := &nestv1.DataResource{
+		ObjectMeta: metav1.ObjectMeta{Name: "bad", Namespace: "default"},
+		Spec: nestv1.DataResourceSpec{
+			Type:     "object",                // dispatches to reconcileObject…
+			Category: nestv1.CategoryDatabase, // …but declared as database → mismatch
+			Tenant:   "tenant-1",
+			Class:    "standard",
+		},
+		Status: nestv1.DataResourceStatus{Phase: nestv1.PhasePending},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(dr).
+		WithStatusSubresource(&nestv1.DataResource{}).
+		Build()
+	r := &DataResourceReconciler{Client: fakeClient, Scheme: scheme}
+
+	_, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "bad", Namespace: "default"},
+	})
+	if err == nil {
+		t.Fatalf("expected a validation error for type/category mismatch")
+	}
+
+	var got nestv1.DataResource
+	if gerr := fakeClient.Get(context.Background(), types.NamespacedName{Name: "bad", Namespace: "default"}, &got); gerr != nil {
+		t.Fatalf("get: %v", gerr)
+	}
+	if got.Status.Phase != nestv1.PhaseFailed {
+		t.Fatalf("phase = %q, want Failed", got.Status.Phase)
+	}
+}

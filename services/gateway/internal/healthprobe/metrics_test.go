@@ -121,7 +121,7 @@ func TestSLOTracker_Record(t *testing.T) {
 	// Verify status
 	status := st.Status("tenant1", "res1")
 	if status == nil {
-		t.Error("Status() returned nil for recorded resource")
+		t.Fatal("Status() returned nil for recorded resource")
 	}
 	if status.TotalProbes != 3 {
 		t.Errorf("TotalProbes = %d, want 3", status.TotalProbes)

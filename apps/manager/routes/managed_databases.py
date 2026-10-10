@@ -1,9 +1,10 @@
 """Managed database entry routes."""
+
 import asyncio
 import logging
-from quart import Blueprint, jsonify, request, g
 
 from penguin_dal.quart_ext import get_db
+from quart import Blueprint, g, jsonify, request
 from utils.auth import require_auth, require_role
 
 logger = logging.getLogger(__name__)
@@ -15,11 +16,10 @@ databases_bp = Blueprint("databases_bp", __name__, url_prefix="/api/v1")
 @require_auth
 async def list_databases():
     """List all managed database entries."""
+
     def _query():
         db = get_db()
-        rows = db(db.managed_database.id > 0).select(
-            orderby=db.managed_database.id
-        )
+        rows = db(db.managed_database.id > 0).select(orderby=db.managed_database.id)
         return [r.as_dict() for r in rows]
 
     dbs = await asyncio.to_thread(_query)
@@ -40,7 +40,6 @@ async def create_database():
         return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     def _insert():
-
         db = get_db()
         db_id = db.managed_database.insert(
             server_id=int(body["server_id"]),
@@ -61,6 +60,7 @@ async def create_database():
 @require_auth
 async def get_database(db_id: int):
     """Get a managed database entry."""
+
     def _query():
         db = get_db()
         row = db.managed_database[db_id]
@@ -81,7 +81,6 @@ async def update_database(db_id: int):
         return jsonify({"error": "Request body required"}), 400
 
     def _update():
-
         db = get_db()
         row = db.managed_database[db_id]
         if not row:
@@ -103,6 +102,7 @@ async def update_database(db_id: int):
 @require_role("admin")
 async def delete_database(db_id: int):
     """Delete a managed database entry."""
+
     def _delete():
         db = get_db()
         row = db.managed_database[db_id]
@@ -122,6 +122,7 @@ async def delete_database(db_id: int):
 @require_auth
 async def get_database_schema(db_id: int):
     """Get schema information for a managed database."""
+
     def _query():
         db = get_db()
         db_row = db.managed_database[db_id]
@@ -142,6 +143,7 @@ async def get_database_schema(db_id: int):
 @require_auth
 async def refresh_database_schema(db_id: int):
     """Trigger a schema sync job for a managed database."""
+
     def _check():
         db = get_db()
         row = db.managed_database[db_id]

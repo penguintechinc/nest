@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4
@@ -44,8 +46,8 @@ jobs:
         id: platform-tag
         run: |
           case "${{ matrix.platform }}" in
-            linux/amd64) echo "tag=amd64" >> $GITHUB_OUTPUT ;;
-            linux/arm64) echo "tag=arm64" >> $GITHUB_OUTPUT ;;
+            linux/amd64) echo "tag=amd64" >> "$GITHUB_OUTPUT" ;;
+            linux/arm64) echo "tag=arm64" >> "$GITHUB_OUTPUT" ;;
           esac
 
       - name: Build and push Docker image
@@ -77,13 +79,17 @@ jobs:
       - name: Create and push version manifest
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }} \
-            ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}-amd64 \
-            ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}-arm64
+            -t "ghcr.io/${{ github.repository }}:${TAG_NAME}" \
+            "ghcr.io/${{ github.repository }}:${TAG_NAME}-amd64" \
+            "ghcr.io/${{ github.repository }}:${TAG_NAME}-arm64"
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
 
       - name: Create and push latest manifest
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/${{ github.repository }}:latest \
-            ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}-amd64 \
-            ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}-arm64
+            -t "ghcr.io/${{ github.repository }}:latest" \
+            "ghcr.io/${{ github.repository }}:${TAG_NAME}-amd64" \
+            "ghcr.io/${{ github.repository }}:${TAG_NAME}-arm64"
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}

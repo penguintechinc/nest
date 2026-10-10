@@ -271,7 +271,7 @@ func TestComputeCost_ZeroTokens(t *testing.T) {
 func TestGetHistory_Empty(t *testing.T) {
 	calc := NewCalculator()
 	history := calc.GetHistory("tenant-1")
-	if history != nil && len(history) != 0 {
+	if len(history) != 0 {
 		t.Fatalf("expected empty history, got %d entries", len(history))
 	}
 }
@@ -446,7 +446,7 @@ func TestAllRecords_Empty(t *testing.T) {
 
 	allRecords := calc.AllRecords()
 	// AllRecords returns nil for empty set
-	if allRecords != nil && len(allRecords) != 0 {
+	if len(allRecords) != 0 {
 		t.Errorf("expected nil or 0 records, got %d", len(allRecords))
 	}
 }

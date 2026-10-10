@@ -402,7 +402,7 @@ func TestDataIndexerRoutes(t *testing.T) {
 		}
 		var data LabelsResponse
 		json.NewDecoder(resp.Body).Decode(&data)
-		if data.Targets != nil && len(data.Targets) != 0 {
+		if len(data.Targets) != 0 {
 			t.Errorf("expected 0 targets, got %d", len(data.Targets))
 		}
 	})

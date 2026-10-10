@@ -1,10 +1,11 @@
 """Controller unit tests — certificates, external_ops, provisioning."""
+
 import os
 import sys
 import types
-import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
 # Ensure the manager app directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -18,6 +19,7 @@ os.environ.setdefault("ENCRYPTION_KEY", "")
 # ---------------------------------------------------------------------------
 # Stub heavy modules before importing controllers
 # ---------------------------------------------------------------------------
+
 
 def _stub_modules():
     """Install all stubs needed for controller imports."""
@@ -94,15 +96,20 @@ _stub_modules()
 # EncryptionManager and CredentialGenerator (provisioning.py)
 # ---------------------------------------------------------------------------
 
+
 class TestEncryptionManager:
     def _get_class(self):
         from cryptography.fernet import Fernet
+
         key = Fernet.generate_key()
         # Now import the real class
         import importlib
+
         spec = importlib.util.spec_from_file_location(
             "provisioning",
-            os.path.join(os.path.dirname(__file__), "..", "controllers", "provisioning.py"),
+            os.path.join(
+                os.path.dirname(__file__), "..", "controllers", "provisioning.py"
+            ),
         )
         return key
 
@@ -116,6 +123,7 @@ class TestEncryptionManager:
         key = Fernet.generate_key()
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import EncryptionManager
+
             mgr = EncryptionManager(key=key.decode())
             plaintext = "super_secret_password"
             encrypted = mgr.encrypt(plaintext)
@@ -133,6 +141,7 @@ class TestEncryptionManager:
         key = Fernet.generate_key()
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import EncryptionManager
+
             mgr = EncryptionManager(key=key.decode())
             result = mgr.encrypt("hello")
             assert isinstance(result, str)
@@ -143,6 +152,7 @@ class TestCredentialGenerator:
         """Default password is 32 chars."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             pwd = CredentialGenerator.generate_password()
             assert len(pwd) == 32
 
@@ -150,6 +160,7 @@ class TestCredentialGenerator:
         """Custom password length is respected."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             pwd = CredentialGenerator.generate_password(length=16)
             assert len(pwd) == 16
 
@@ -157,6 +168,7 @@ class TestCredentialGenerator:
         """Password is a string."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             pwd = CredentialGenerator.generate_password()
             assert isinstance(pwd, str)
 
@@ -164,6 +176,7 @@ class TestCredentialGenerator:
         """Username starts with prefix."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             uname = CredentialGenerator.generate_username(prefix="db")
             assert uname.startswith("db_")
 
@@ -171,6 +184,7 @@ class TestCredentialGenerator:
         """Default prefix is 'user'."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             uname = CredentialGenerator.generate_username()
             assert uname.startswith("user_")
 
@@ -178,6 +192,7 @@ class TestCredentialGenerator:
         """API token is the right hex length (length//2 bytes → length hex chars)."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             token = CredentialGenerator.generate_api_token(length=32)
             assert len(token) == 32
 
@@ -185,6 +200,7 @@ class TestCredentialGenerator:
         """API token is a string."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             token = CredentialGenerator.generate_api_token()
             assert isinstance(token, str)
 
@@ -192,6 +208,7 @@ class TestCredentialGenerator:
         """Two generated passwords differ (probabilistically)."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import CredentialGenerator
+
             p1 = CredentialGenerator.generate_password()
             p2 = CredentialGenerator.generate_password()
             assert p1 != p2
@@ -201,11 +218,13 @@ class TestCredentialGenerator:
 # TemplateRenderer (provisioning.py)
 # ---------------------------------------------------------------------------
 
+
 class TestTemplateRenderer:
     def test_render_statefulset_unsupported_type_raises(self):
         """Unsupported resource type raises ValueError."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import TemplateRenderer
+
             renderer = TemplateRenderer(template_dir="/tmp/fake_templates")
             with pytest.raises((ValueError, Exception)):
                 renderer.render_statefulset_template("unknown-type", {})
@@ -214,9 +233,12 @@ class TestTemplateRenderer:
         """Known resource type calls render_template."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import TemplateRenderer
+
             renderer = TemplateRenderer(template_dir="/tmp/fake_templates")
             renderer.render_template = MagicMock(return_value="yaml: content")
-            result = renderer.render_statefulset_template("db-postgresql", {"key": "val"})
+            result = renderer.render_statefulset_template(
+                "db-postgresql", {"key": "val"}
+            )
             renderer.render_template.assert_called_once_with(
                 "statefulset/postgresql.yaml", {"key": "val"}
             )
@@ -226,6 +248,7 @@ class TestTemplateRenderer:
         """All expected resource types have a template mapping."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import TemplateRenderer
+
             renderer = TemplateRenderer(template_dir="/tmp/fake_templates")
             renderer.render_template = MagicMock(return_value="")
             for rtype in ("db-postgresql", "db-redis", "db-mariadb", "db-valkey"):
@@ -237,6 +260,7 @@ class TestTemplateRenderer:
 # ExternalOpsController — static helpers
 # ---------------------------------------------------------------------------
 
+
 class TestExternalOpsController:
     def test_load_resource_raises_when_not_found(self):
         """_load_resource raises InvalidResourceError if resource missing."""
@@ -247,7 +271,11 @@ class TestExternalOpsController:
         db.resources.__getitem__ = MagicMock(return_value=falsy_resource)
 
         with patch("controllers.external_ops.get_db", return_value=db):
-            from controllers.external_ops import ExternalOpsController, InvalidResourceError
+            from controllers.external_ops import (
+                ExternalOpsController,
+                InvalidResourceError,
+            )
+
             with pytest.raises(InvalidResourceError):
                 ExternalOpsController._load_resource(999)
 
@@ -260,6 +288,7 @@ class TestExternalOpsController:
 
         with patch("controllers.external_ops.get_db", return_value=db):
             from controllers.external_ops import ExternalOpsController
+
             result = ExternalOpsController._load_resource(1)
             assert result == resource
 
@@ -271,6 +300,7 @@ class TestExternalOpsController:
 
         with patch("penguin_dal.quart_ext.get_db", return_value=db):
             from controllers.external_ops import ExternalOpsController
+
             # Should not raise
             ExternalOpsController._validate_lifecycle_mode(resource)
 
@@ -282,6 +312,7 @@ class TestExternalOpsController:
 
         with patch("penguin_dal.quart_ext.get_db", return_value=db):
             from controllers.external_ops import ExternalOpsController
+
             # Should not raise
             ExternalOpsController._validate_lifecycle_mode(resource)
 
@@ -292,7 +323,11 @@ class TestExternalOpsController:
         db = MagicMock()
 
         with patch("controllers.external_ops.get_db", return_value=db):
-            from controllers.external_ops import ExternalOpsController, InvalidResourceError
+            from controllers.external_ops import (
+                ExternalOpsController,
+                InvalidResourceError,
+            )
+
             with pytest.raises(InvalidResourceError):
                 ExternalOpsController._validate_lifecycle_mode(resource)
 
@@ -301,6 +336,7 @@ class TestExternalOpsController:
         db = MagicMock()
         with patch("penguin_dal.quart_ext.get_db", return_value=db):
             from controllers.external_ops import ExternalOpsController
+
             cls = ExternalOpsController._get_connector_class("db-postgresql")
             assert cls is not None
 
@@ -308,7 +344,8 @@ class TestExternalOpsController:
         """Unknown resource type raises ConnectorError."""
         db = MagicMock()
         with patch("penguin_dal.quart_ext.get_db", return_value=db):
-            from controllers.external_ops import ExternalOpsController, ConnectorError
+            from controllers.external_ops import ConnectorError, ExternalOpsController
+
             with pytest.raises(ConnectorError):
                 ExternalOpsController._get_connector_class("db-unknown-type")
 
@@ -316,11 +353,15 @@ class TestExternalOpsController:
         """All supported types return a connector class."""
         db = MagicMock()
         supported = [
-            "db-postgresql", "db-mariadb", "db-redis",
-            "storage-ceph", "storage-san",
+            "db-postgresql",
+            "db-mariadb",
+            "db-redis",
+            "storage-ceph",
+            "storage-san",
         ]
         with patch("penguin_dal.quart_ext.get_db", return_value=db):
             from controllers.external_ops import ExternalOpsController
+
             for rtype in supported:
                 cls = ExternalOpsController._get_connector_class(rtype)
                 assert cls is not None, f"No connector for {rtype}"
@@ -339,7 +380,10 @@ class TestExternalOpsController:
 
         with patch("penguin_dal.quart_ext.get_db", return_value=db):
             from controllers.external_ops import ExternalOpsController
-            result = ExternalOpsController._initialize_connector(mock_connector_class, resource)
+
+            result = ExternalOpsController._initialize_connector(
+                mock_connector_class, resource
+            )
             assert result == mock_instance
 
     def test_initialize_connector_with_empty_credentials(self):
@@ -356,13 +400,17 @@ class TestExternalOpsController:
 
         with patch("penguin_dal.quart_ext.get_db", return_value=db):
             from controllers.external_ops import ExternalOpsController
-            result = ExternalOpsController._initialize_connector(mock_connector_class, resource)
+
+            result = ExternalOpsController._initialize_connector(
+                mock_connector_class, resource
+            )
             assert result == mock_instance
 
 
 # ---------------------------------------------------------------------------
 # CertificatesController RBAC helpers
 # ---------------------------------------------------------------------------
+
 
 class TestCertificatesController:
     def _make_db(self):
@@ -380,6 +428,7 @@ class TestCertificatesController:
         if db is None:
             db = self._make_db()
         from controllers.certificates import CertificatesController
+
         ctrl = CertificatesController.__new__(CertificatesController)
         ctrl.db = db
         ctrl.k8s_client = MagicMock()
@@ -460,6 +509,7 @@ class TestCertificatesController:
     def test_check_ca_access_raises_for_non_admin(self):
         """_check_ca_access raises CertificateAccessDenied for non-admin."""
         from controllers.certificates import CertificateAccessDenied
+
         db = self._make_db()
         select_result = MagicMock()
         select_result.first.return_value = None
@@ -505,7 +555,7 @@ class TestCertificatesController:
 
     def test_check_certificate_access_team_admin_passes(self):
         """Team admin can manage certificates in their team."""
-        from controllers.certificates import CertificatesController
+
         db = self._make_db()
         ctrl = self._make_controller(db)
         ctrl._is_global_admin = MagicMock(return_value=False)
@@ -516,6 +566,7 @@ class TestCertificatesController:
     def test_check_certificate_access_non_admin_raises(self):
         """Non-admin team member cannot manage certificates."""
         from controllers.certificates import CertificateAccessDenied
+
         db = self._make_db()
         ctrl = self._make_controller(db)
         ctrl._is_global_admin = MagicMock(return_value=False)
@@ -526,6 +577,7 @@ class TestCertificatesController:
     def test_check_certificate_view_non_member_raises(self):
         """Non-member cannot view certificates."""
         from controllers.certificates import CertificateAccessDenied
+
         db = self._make_db()
         ctrl = self._make_controller(db)
         ctrl._is_global_admin = MagicMock(return_value=False)
@@ -555,26 +607,27 @@ class TestCertificatesController:
 # ExternalOpsController — error classes
 # ---------------------------------------------------------------------------
 
+
 class TestExternalOpsErrors:
     def test_invalid_resource_error_is_subclass(self):
         """InvalidResourceError inherits from ExternalOpsControllerError."""
         from controllers.external_ops import (
-            InvalidResourceError,
             ExternalOpsControllerError,
+            InvalidResourceError,
         )
+
         assert issubclass(InvalidResourceError, ExternalOpsControllerError)
 
     def test_connector_error_is_subclass(self):
         """ConnectorError inherits from ExternalOpsControllerError."""
-        from controllers.external_ops import (
-            ConnectorError,
-            ExternalOpsControllerError,
-        )
+        from controllers.external_ops import ConnectorError, ExternalOpsControllerError
+
         assert issubclass(ConnectorError, ExternalOpsControllerError)
 
     def test_external_ops_error_is_exception(self):
         """ExternalOpsControllerError is an Exception."""
         from controllers.external_ops import ExternalOpsControllerError
+
         assert issubclass(ExternalOpsControllerError, Exception)
 
 
@@ -582,23 +635,27 @@ class TestExternalOpsErrors:
 # ProvisioningController — SUPPORTED_RESOURCE_TYPES
 # ---------------------------------------------------------------------------
 
+
 class TestProvisioningController:
     def test_supported_resource_types_contains_postgresql(self):
         """db-postgresql is in supported types."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import ProvisioningController
+
             assert "db-postgresql" in ProvisioningController.SUPPORTED_RESOURCE_TYPES
 
     def test_supported_resource_types_contains_redis(self):
         """db-redis is in supported types."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import ProvisioningController
+
             assert "db-redis" in ProvisioningController.SUPPORTED_RESOURCE_TYPES
 
     def test_supported_resource_types_non_empty(self):
         """Supported resource types list is non-empty."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import ProvisioningController
+
             assert len(ProvisioningController.SUPPORTED_RESOURCE_TYPES) > 0
 
 
@@ -606,11 +663,13 @@ class TestProvisioningController:
 # ProvisioningStatus dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestProvisioningStatus:
     def test_provisioning_status_creation(self):
         """ProvisioningStatus dataclass holds expected fields."""
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import ProvisioningStatus
+
             status = ProvisioningStatus(
                 resource_id=1,
                 status="provisioning",
@@ -627,8 +686,10 @@ class TestProvisioningStatus:
     def test_provisioning_status_with_all_fields(self):
         """ProvisioningStatus accepts all optional fields."""
         from datetime import datetime
+
         with patch("penguin_dal.quart_ext.get_db", return_value=MagicMock()):
             from controllers.provisioning import ProvisioningStatus
+
             now = datetime.utcnow()
             status = ProvisioningStatus(
                 resource_id=2,
@@ -647,12 +708,14 @@ class TestProvisioningStatus:
 # CertificatesController RBAC & Audit Tests (Lines 51-289)
 # ---------------------------------------------------------------------------
 
+
 class TestCertificatesControllerRBAC:
     """Test RBAC helper methods and initialization."""
 
     def test_controller_initialization(self):
         """CertificatesController initializes with db and k8s_client."""
         from unittest.mock import MagicMock
+
         from controllers.certificates import CertificatesController
 
         mock_db = MagicMock()
@@ -669,7 +732,7 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'admin'
+        membership.role = "admin"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
@@ -697,7 +760,7 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'member'
+        membership.role = "member"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
@@ -710,12 +773,12 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'admin'
+        membership.role = "admin"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
         result = controller._get_user_team_role(user_id=1, team_id=2)
-        assert result == 'admin'
+        assert result == "admin"
 
     def test_get_user_team_role_returns_none(self):
         """_get_user_team_role returns None if not a member."""
@@ -734,7 +797,7 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'admin'
+        membership.role = "admin"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
@@ -743,7 +806,10 @@ class TestCertificatesControllerRBAC:
 
     def test_check_ca_access_denied(self):
         """_check_ca_access raises for non-admin."""
-        from controllers.certificates import CertificatesController, CertificateAccessDenied
+        from controllers.certificates import (
+            CertificateAccessDenied,
+            CertificatesController,
+        )
 
         mock_db = MagicMock()
         mock_db.return_value.select.return_value.first.return_value = None
@@ -758,7 +824,7 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'admin'
+        membership.role = "admin"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
@@ -771,7 +837,7 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         # Configure mock to handle multiple calls
-        call_sequence = [None, 'admin']  # First: no global admin, Second: team admin
+        call_sequence = [None, "admin"]  # First: no global admin, Second: team admin
         call_count = [0]
 
         def mock_call(*args, **kwargs):
@@ -787,7 +853,7 @@ class TestCertificatesControllerRBAC:
                         return None  # Not global admin
                     else:
                         m = MagicMock()
-                        m.role = 'admin'
+                        m.role = "admin"
                         return m
 
                 result.first = first
@@ -804,7 +870,10 @@ class TestCertificatesControllerRBAC:
 
     def test_check_certificate_access_denied_non_member(self):
         """_check_certificate_access denies non-team member."""
-        from controllers.certificates import CertificatesController, CertificateAccessDenied
+        from controllers.certificates import (
+            CertificateAccessDenied,
+            CertificatesController,
+        )
 
         mock_db = MagicMock()
         mock_db.return_value.select.return_value.first.return_value = None
@@ -815,11 +884,14 @@ class TestCertificatesControllerRBAC:
 
     def test_check_certificate_access_denied_non_admin(self):
         """_check_certificate_access denies non-admin team member."""
-        from controllers.certificates import CertificatesController, CertificateAccessDenied
+        from controllers.certificates import (
+            CertificateAccessDenied,
+            CertificatesController,
+        )
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'member'
+        membership.role = "member"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
@@ -832,7 +904,7 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'admin'
+        membership.role = "admin"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
@@ -845,7 +917,7 @@ class TestCertificatesControllerRBAC:
 
         mock_db = MagicMock()
         membership = MagicMock()
-        membership.role = 'member'
+        membership.role = "member"
         mock_db.return_value.select.return_value.first.return_value = membership
 
         controller = CertificatesController(mock_db, MagicMock())
@@ -854,7 +926,10 @@ class TestCertificatesControllerRBAC:
 
     def test_check_certificate_view_denied_non_member(self):
         """_check_certificate_view denies non-team member."""
-        from controllers.certificates import CertificatesController, CertificateAccessDenied
+        from controllers.certificates import (
+            CertificateAccessDenied,
+            CertificatesController,
+        )
 
         mock_db = MagicMock()
         mock_db.return_value.select.return_value.first.return_value = None
@@ -872,11 +947,11 @@ class TestCertificatesControllerRBAC:
 
         controller._create_audit_log(
             user_id=1,
-            action='test_action',
-            resource_type='certificate',
+            action="test_action",
+            resource_type="certificate",
             resource_id=10,
             team_id=2,
-            details={'key': 'value'}
+            details={"key": "value"},
         )
 
         mock_db.audit_logs.insert.assert_called_once()
@@ -892,9 +967,7 @@ class TestCertificatesControllerRBAC:
         controller = CertificatesController(mock_db, MagicMock())
         # Should not raise
         controller._create_audit_log(
-            user_id=1,
-            action='test_action',
-            resource_type='certificate'
+            user_id=1, action="test_action", resource_type="certificate"
         )
 
     def test_create_audit_log_with_none_optional_fields(self):
@@ -906,11 +979,11 @@ class TestCertificatesControllerRBAC:
 
         controller._create_audit_log(
             user_id=1,
-            action='test_action',
-            resource_type='certificate',
+            action="test_action",
+            resource_type="certificate",
             resource_id=None,
             team_id=None,
-            details=None
+            details=None,
         )
 
         mock_db.audit_logs.insert.assert_called_once()
@@ -919,6 +992,7 @@ class TestCertificatesControllerRBAC:
 # ---------------------------------------------------------------------------
 # ProvisioningController Initialization & Error Handling (Lines 59-260)
 # ---------------------------------------------------------------------------
+
 
 class TestProvisioningControllerInit:
     """Test ProvisioningController initialization and setup."""
@@ -944,7 +1018,7 @@ class TestProvisioningControllerInit:
         controller = ProvisioningController(
             k8s_client=mock_k8s,
             template_renderer=mock_renderer,
-            encryption_manager=mock_encryption
+            encryption_manager=mock_encryption,
         )
         assert controller.k8s_client == mock_k8s
         assert controller.template_renderer == mock_renderer
@@ -954,25 +1028,25 @@ class TestProvisioningControllerInit:
         """SUPPORTED_RESOURCE_TYPES includes PostgreSQL."""
         from controllers.provisioning import ProvisioningController
 
-        assert 'db-postgresql' in ProvisioningController.SUPPORTED_RESOURCE_TYPES
+        assert "db-postgresql" in ProvisioningController.SUPPORTED_RESOURCE_TYPES
 
     def test_supported_resource_types_contains_redis(self):
         """SUPPORTED_RESOURCE_TYPES includes Redis."""
         from controllers.provisioning import ProvisioningController
 
-        assert 'db-redis' in ProvisioningController.SUPPORTED_RESOURCE_TYPES
+        assert "db-redis" in ProvisioningController.SUPPORTED_RESOURCE_TYPES
 
     def test_supported_resource_types_contains_mariadb(self):
         """SUPPORTED_RESOURCE_TYPES includes MariaDB."""
         from controllers.provisioning import ProvisioningController
 
-        assert 'db-mariadb' in ProvisioningController.SUPPORTED_RESOURCE_TYPES
+        assert "db-mariadb" in ProvisioningController.SUPPORTED_RESOURCE_TYPES
 
     def test_supported_resource_types_contains_valkey(self):
         """SUPPORTED_RESOURCE_TYPES includes Valkey."""
         from controllers.provisioning import ProvisioningController
 
-        assert 'db-valkey' in ProvisioningController.SUPPORTED_RESOURCE_TYPES
+        assert "db-valkey" in ProvisioningController.SUPPORTED_RESOURCE_TYPES
 
     def test_service_type_mapping_all_resources(self):
         """SERVICE_TYPE_MAPPING covers all resource types."""
@@ -992,31 +1066,32 @@ class TestProvisioningControllerInit:
         """DEFAULT_PORTS sets correct PostgreSQL port."""
         from controllers.provisioning import ProvisioningController
 
-        assert ProvisioningController.DEFAULT_PORTS['db-postgresql'] == 5432
+        assert ProvisioningController.DEFAULT_PORTS["db-postgresql"] == 5432
 
     def test_default_port_redis(self):
         """DEFAULT_PORTS sets correct Redis port."""
         from controllers.provisioning import ProvisioningController
 
-        assert ProvisioningController.DEFAULT_PORTS['db-redis'] == 6379
+        assert ProvisioningController.DEFAULT_PORTS["db-redis"] == 6379
 
     def test_default_port_mariadb(self):
         """DEFAULT_PORTS sets correct MariaDB port."""
         from controllers.provisioning import ProvisioningController
 
-        assert ProvisioningController.DEFAULT_PORTS['db-mariadb'] == 3306
+        assert ProvisioningController.DEFAULT_PORTS["db-mariadb"] == 3306
 
     def test_service_type_clusterip_all_resources(self):
         """SERVICE_TYPE_MAPPING uses ClusterIP for all resources."""
         from controllers.provisioning import ProvisioningController
 
         for service_type in ProvisioningController.SERVICE_TYPE_MAPPING.values():
-            assert service_type == 'ClusterIP'
+            assert service_type == "ClusterIP"
 
 
 # ---------------------------------------------------------------------------
 # EncryptionManager & CredentialGenerator Additional Tests
 # ---------------------------------------------------------------------------
+
 
 class TestCredentialGenerator:
     """Test credential generation helpers."""
@@ -1039,22 +1114,22 @@ class TestCredentialGenerator:
         """generate_username includes prefix."""
         from controllers.provisioning import CredentialGenerator
 
-        username = CredentialGenerator.generate_username(prefix='db_user')
-        assert username.startswith('db_user_')
+        username = CredentialGenerator.generate_username(prefix="db_user")
+        assert username.startswith("db_user_")
 
     def test_generate_username_custom_prefix(self):
         """generate_username uses custom prefix."""
         from controllers.provisioning import CredentialGenerator
 
-        username = CredentialGenerator.generate_username(prefix='app')
-        assert username.startswith('app_')
+        username = CredentialGenerator.generate_username(prefix="app")
+        assert username.startswith("app_")
 
     def test_generate_username_suffix_length(self):
         """generate_username suffix has correct length."""
         from controllers.provisioning import CredentialGenerator
 
-        username = CredentialGenerator.generate_username(prefix='user', length=6)
-        suffix = username.split('_')[-1]
+        username = CredentialGenerator.generate_username(prefix="user", length=6)
+        suffix = username.split("_")[-1]
         assert len(suffix) == 6
 
     def test_generate_api_token_length(self):
@@ -1086,8 +1161,9 @@ class TestTemplateRenderer:
 
     def test_template_renderer_custom_dir(self):
         """TemplateRenderer accepts custom template directory."""
-        from controllers.provisioning import TemplateRenderer
         import tempfile
+
+        from controllers.provisioning import TemplateRenderer
 
         with tempfile.TemporaryDirectory() as tmpdir:
             renderer = TemplateRenderer(template_dir=tmpdir)

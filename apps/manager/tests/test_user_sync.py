@@ -1,10 +1,12 @@
 """Tests for user_sync worker module."""
+
 import os
-import sys
 import signal
-import pytest
-from unittest.mock import MagicMock, patch, Mock
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Ensure app root is in sys.path
 app_root = Path(__file__).parent.parent
@@ -29,13 +31,14 @@ os.environ.setdefault("REDIS_PORT", "6379")
 # OperationRecord` binds a MagicMock and its store keys never match
 # ("Operation tenant-1/op-1 not found").
 _ORIG_MODELS_MODULES = {
-    name: mod for name, mod in sys.modules.items()
+    name: mod
+    for name, mod in sys.modules.items()
     if name == "models" or name.startswith("models.")
 }
 sys.modules["models"] = MagicMock(db=MagicMock())
 import workers.user_sync  # noqa: E402,F401  (import under the models mock)
-for _name in [n for n in sys.modules
-              if n == "models" or n.startswith("models.")]:
+
+for _name in [n for n in sys.modules if n == "models" or n.startswith("models.")]:
     del sys.modules[_name]
 sys.modules.update(_ORIG_MODELS_MODULES)
 
@@ -47,12 +50,14 @@ class TestUserSyncWorker:
         """Test UserSyncWorker class can be imported."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             assert UserSyncWorker is not None
 
     def test_user_sync_init_with_parameters(self):
         """Test UserSyncWorker can be initialized with parameters."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker(sleep_interval=60, batch_size=20)
             assert worker.sleep_interval == 60
             assert worker.batch_size == 20
@@ -61,6 +66,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker initializes with default parameters."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert worker.sleep_interval == 30
             assert worker.batch_size == 10
@@ -69,6 +75,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker running flag starts as True."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert worker.running is True
 
@@ -76,6 +83,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has db reference."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert worker.db is not None
 
@@ -83,6 +91,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has _handle_shutdown method."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert hasattr(worker, "_handle_shutdown")
 
@@ -90,6 +99,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has sync_pending_users method."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert hasattr(worker, "sync_pending_users")
 
@@ -97,6 +107,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has sync_user method."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert hasattr(worker, "sync_user")
 
@@ -104,6 +115,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has delete_user method."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert hasattr(worker, "delete_user")
 
@@ -111,6 +123,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has _get_connector method."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert hasattr(worker, "_get_connector")
 
@@ -118,6 +131,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has _handle_sync_error method."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert hasattr(worker, "_handle_sync_error")
 
@@ -125,6 +139,7 @@ class TestUserSyncWorker:
         """Test UserSyncWorker has run method."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             assert hasattr(worker, "run")
 
@@ -132,6 +147,7 @@ class TestUserSyncWorker:
         """Test _get_connector returns None for unknown resource type."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             connector = worker._get_connector("unknown-type", {}, {})
             assert connector is None
@@ -140,6 +156,7 @@ class TestUserSyncWorker:
         """Test _get_connector returns None when connection_info is missing."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             connector = worker._get_connector("db-postgresql", None, {"user": "admin"})
             assert connector is None
@@ -148,14 +165,18 @@ class TestUserSyncWorker:
         """Test _get_connector returns None when credentials are missing."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
-            connector = worker._get_connector("db-postgresql", {"host": "localhost"}, None)
+            connector = worker._get_connector(
+                "db-postgresql", {"host": "localhost"}, None
+            )
             assert connector is None
 
     def test_user_sync_shutdown_sets_running_false(self):
         """Test _handle_shutdown sets running to False."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker._handle_shutdown(signal.SIGTERM, None)
             assert worker.running is False
@@ -164,6 +185,7 @@ class TestUserSyncWorker:
         """Test signal handlers are registered during init."""
         with patch("signal.signal") as mock_signal:
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             # Verify signal.signal was called for SIGTERM and SIGINT
             assert mock_signal.call_count >= 2
@@ -176,30 +198,35 @@ class TestUserSyncIntegration:
         """Test user_sync module can be imported."""
         with patch("signal.signal"):
             from workers import user_sync
+
             assert user_sync is not None
 
     def test_user_sync_has_main_function(self):
         """Test user_sync module has main function."""
         with patch("signal.signal"):
             from workers import user_sync
+
             assert hasattr(user_sync, "main")
 
     def test_user_sync_main_callable(self):
         """Test main function is callable."""
         with patch("signal.signal"):
             from workers.user_sync import main
+
             assert callable(main)
 
     def test_user_sync_logger_exists(self):
         """Test user_sync module has logger."""
         with patch("signal.signal"):
             from workers import user_sync
+
             assert hasattr(user_sync, "logger")
 
     def test_user_sync_postgresql_connector_import_attempt(self):
         """Test PostgreSQLConnector import is attempted."""
         with patch("signal.signal"):
             from workers import user_sync
+
             # Module should have imported or set PostgreSQLConnector
             assert hasattr(user_sync, "PostgreSQLConnector")
 
@@ -207,30 +234,35 @@ class TestUserSyncIntegration:
         """Test MariaDBConnector import is attempted."""
         with patch("signal.signal"):
             from workers import user_sync
+
             assert hasattr(user_sync, "MariaDBConnector")
 
     def test_user_sync_redis_connector_import_attempt(self):
         """Test RedisConnector import is attempted."""
         with patch("signal.signal"):
             from workers import user_sync
+
             assert hasattr(user_sync, "RedisConnector")
 
     def test_user_sync_ceph_connector_import_attempt(self):
         """Test CephConnector import is attempted."""
         with patch("signal.signal"):
             from workers import user_sync
+
             assert hasattr(user_sync, "CephConnector")
 
     def test_user_sync_san_connector_import_attempt(self):
         """Test SANConnector import is attempted."""
         with patch("signal.signal"):
             from workers import user_sync
+
             assert hasattr(user_sync, "SANConnector")
 
     def test_user_sync_constants_defined(self):
         """Test user_sync module constants are defined."""
         with patch("signal.signal"):
             from workers import user_sync
+
             # Should have basic module-level constants
             assert user_sync is not None
 
@@ -242,6 +274,7 @@ class TestSyncUserMethod:
         """Test sync_user returns early when resource_user not found."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
             worker.db.__getitem__.return_value = None  # resource_users[id] returns None
@@ -443,7 +476,9 @@ class TestSyncUserMethod:
             }.get((table_id[0], table_id[1]), None)
 
             mock_connector = MagicMock()
-            mock_connector.user_exists.side_effect = ConnectionError("Connection failed")
+            mock_connector.user_exists.side_effect = ConnectionError(
+                "Connection failed"
+            )
 
             with patch.object(worker, "_get_connector", return_value=mock_connector):
                 with patch.object(worker, "_handle_sync_error") as mock_error:
@@ -458,6 +493,7 @@ class TestDeleteUserMethod:
         """Test delete_user returns early when resource_user not found."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             mock_db = MagicMock()
@@ -571,14 +607,13 @@ class TestGetConnectorMethod:
         """Test _get_connector returns PostgreSQLConnector for db-postgresql."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             with patch("workers.user_sync.PostgreSQLConnector") as mock_pg:
                 mock_pg.return_value = MagicMock()
                 connector = worker._get_connector(
-                    "db-postgresql",
-                    {"host": "localhost"},
-                    {"user": "admin"}
+                    "db-postgresql", {"host": "localhost"}, {"user": "admin"}
                 )
                 mock_pg.assert_called_once()
                 assert connector is not None
@@ -587,14 +622,13 @@ class TestGetConnectorMethod:
         """Test _get_connector returns MariaDBConnector for db-mariadb."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             with patch("workers.user_sync.MariaDBConnector") as mock_mdb:
                 mock_mdb.return_value = MagicMock()
                 connector = worker._get_connector(
-                    "db-mariadb",
-                    {"host": "localhost"},
-                    {"user": "admin"}
+                    "db-mariadb", {"host": "localhost"}, {"user": "admin"}
                 )
                 mock_mdb.assert_called_once()
                 assert connector is not None
@@ -603,14 +637,13 @@ class TestGetConnectorMethod:
         """Test _get_connector returns RedisConnector for db-redis."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             with patch("workers.user_sync.RedisConnector") as mock_redis:
                 mock_redis.return_value = MagicMock()
                 connector = worker._get_connector(
-                    "db-redis",
-                    {"host": "localhost"},
-                    {"password": "secret"}
+                    "db-redis", {"host": "localhost"}, {"password": "secret"}
                 )
                 mock_redis.assert_called_once()
                 assert connector is not None
@@ -619,14 +652,13 @@ class TestGetConnectorMethod:
         """Test _get_connector returns RedisConnector for db-valkey."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             with patch("workers.user_sync.RedisConnector") as mock_valkey:
                 mock_valkey.return_value = MagicMock()
                 connector = worker._get_connector(
-                    "db-valkey",
-                    {"host": "localhost"},
-                    {"password": "secret"}
+                    "db-valkey", {"host": "localhost"}, {"password": "secret"}
                 )
                 mock_valkey.assert_called_once()
                 assert connector is not None
@@ -635,14 +667,13 @@ class TestGetConnectorMethod:
         """Test _get_connector returns CephConnector for storage-ceph."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             with patch("workers.user_sync.CephConnector") as mock_ceph:
                 mock_ceph.return_value = MagicMock()
                 connector = worker._get_connector(
-                    "storage-ceph",
-                    {"endpoint": "ceph.local"},
-                    {"access_key": "key"}
+                    "storage-ceph", {"endpoint": "ceph.local"}, {"access_key": "key"}
                 )
                 mock_ceph.assert_called_once()
                 assert connector is not None
@@ -651,14 +682,13 @@ class TestGetConnectorMethod:
         """Test _get_connector returns SANConnector for storage-san."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             with patch("workers.user_sync.SANConnector") as mock_san:
                 mock_san.return_value = MagicMock()
                 connector = worker._get_connector(
-                    "storage-san",
-                    {"target": "san.local"},
-                    {"iqn": "iqn.local"}
+                    "storage-san", {"target": "san.local"}, {"iqn": "iqn.local"}
                 )
                 mock_san.assert_called_once()
                 assert connector is not None
@@ -667,12 +697,11 @@ class TestGetConnectorMethod:
         """Test _get_connector returns None for unknown type."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             connector = worker._get_connector(
-                "unknown-type",
-                {"host": "localhost"},
-                {"user": "admin"}
+                "unknown-type", {"host": "localhost"}, {"user": "admin"}
             )
             assert connector is None
 
@@ -680,25 +709,21 @@ class TestGetConnectorMethod:
         """Test _get_connector returns None when connection_info is None."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
-            connector = worker._get_connector(
-                "db-postgresql",
-                None,
-                {"user": "admin"}
-            )
+            connector = worker._get_connector("db-postgresql", None, {"user": "admin"})
             assert connector is None
 
     def test_get_connector_missing_credentials(self):
         """Test _get_connector returns None when credentials is None."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             connector = worker._get_connector(
-                "db-postgresql",
-                {"host": "localhost"},
-                None
+                "db-postgresql", {"host": "localhost"}, None
             )
             assert connector is None
 
@@ -706,13 +731,15 @@ class TestGetConnectorMethod:
         """Test _get_connector handles connector initialization errors."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
-            with patch("workers.user_sync.PostgreSQLConnector", side_effect=Exception("Init failed")):
+            with patch(
+                "workers.user_sync.PostgreSQLConnector",
+                side_effect=Exception("Init failed"),
+            ):
                 connector = worker._get_connector(
-                    "db-postgresql",
-                    {"host": "localhost"},
-                    {"user": "admin"}
+                    "db-postgresql", {"host": "localhost"}, {"user": "admin"}
                 )
                 assert connector is None
 
@@ -724,6 +751,7 @@ class TestSyncPendingUsersMethod:
         """Test sync_pending_users processes pending users."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
 
@@ -742,6 +770,7 @@ class TestSyncPendingUsersMethod:
         """Test sync_pending_users returns early when no pending users."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
 
@@ -756,6 +785,7 @@ class TestSyncPendingUsersMethod:
         """Test sync_pending_users respects running flag."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
             worker.running = False
@@ -774,6 +804,7 @@ class TestSyncPendingUsersMethod:
         """Test sync_pending_users handles errors during sync_user."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
 
@@ -782,7 +813,9 @@ class TestSyncPendingUsersMethod:
 
             worker.db.return_value.select.return_value = [resource_user]
 
-            with patch.object(worker, "sync_user", side_effect=Exception("Sync failed")):
+            with patch.object(
+                worker, "sync_user", side_effect=Exception("Sync failed")
+            ):
                 # Should not raise, just log error
                 worker.sync_pending_users()
 
@@ -790,6 +823,7 @@ class TestSyncPendingUsersMethod:
         """Test sync_pending_users handles database errors."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
 
@@ -807,6 +841,7 @@ class TestRunMethod:
         """Test run loop exits on shutdown signal."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             with patch.object(worker, "sync_pending_users"):
@@ -820,6 +855,7 @@ class TestRunMethod:
         """Test run loop calls sync_pending_users."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             # Track calls
@@ -839,6 +875,7 @@ class TestRunMethod:
         """Test run loop sleeps between cycles."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker(sleep_interval=60)
 
             with patch.object(worker, "sync_pending_users"):
@@ -851,9 +888,12 @@ class TestRunMethod:
         """Test run loop handles KeyboardInterrupt gracefully."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
-            with patch.object(worker, "sync_pending_users", side_effect=KeyboardInterrupt()):
+            with patch.object(
+                worker, "sync_pending_users", side_effect=KeyboardInterrupt()
+            ):
                 with patch("time.sleep"):
                     worker.run()
                     # Should exit gracefully
@@ -862,6 +902,7 @@ class TestRunMethod:
         """Test run loop handles general exceptions."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             call_count = [0]
@@ -885,6 +926,7 @@ class TestHandleSyncErrorMethod:
         """Test _handle_sync_error updates resource_user record."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
 
             resource_user = MagicMock()
@@ -903,6 +945,7 @@ class TestHandleSyncErrorMethod:
         """Test _handle_sync_error handles missing record."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
             worker.db.__getitem__.return_value = None
@@ -914,6 +957,7 @@ class TestHandleSyncErrorMethod:
         """Test _handle_sync_error handles update failures."""
         with patch("signal.signal"):
             from workers.user_sync import UserSyncWorker
+
             worker = UserSyncWorker()
             worker.db = MagicMock()
 
@@ -979,6 +1023,7 @@ class TestMainFunction:
         """Test main function is callable."""
         with patch("signal.signal"):
             from workers.user_sync import main
+
             assert callable(main)
 
     def test_main_reads_environment_variables(self):
@@ -988,13 +1033,13 @@ class TestMainFunction:
                 mock_instance = MagicMock()
                 mock_worker_class.return_value = mock_instance
 
-                with patch.dict(os.environ, {
-                    "SYNC_INTERVAL": "60",
-                    "BATCH_SIZE": "20",
-                    "LOG_LEVEL": "DEBUG"
-                }):
+                with patch.dict(
+                    os.environ,
+                    {"SYNC_INTERVAL": "60", "BATCH_SIZE": "20", "LOG_LEVEL": "DEBUG"},
+                ):
                     with patch("sys.exit"):
                         from workers.user_sync import main
+
                         main()
 
                         # Verify UserSyncWorker was instantiated with env values
@@ -1010,10 +1055,15 @@ class TestMainFunction:
                 mock_instance = MagicMock()
                 mock_worker_class.return_value = mock_instance
 
-                env = {k: v for k, v in os.environ.items() if k not in ["SYNC_INTERVAL", "BATCH_SIZE", "LOG_LEVEL"]}
+                env = {
+                    k: v
+                    for k, v in os.environ.items()
+                    if k not in ["SYNC_INTERVAL", "BATCH_SIZE", "LOG_LEVEL"]
+                }
                 with patch.dict(os.environ, env, clear=True):
                     with patch("sys.exit"):
                         from workers.user_sync import main
+
                         main()
 
                         # Verify defaults were used
@@ -1025,9 +1075,12 @@ class TestMainFunction:
     def test_main_exception_handling(self):
         """Test main function handles initialization exceptions."""
         with patch("signal.signal"):
-            with patch("workers.user_sync.UserSyncWorker", side_effect=Exception("Init failed")):
+            with patch(
+                "workers.user_sync.UserSyncWorker", side_effect=Exception("Init failed")
+            ):
                 with patch("sys.exit") as mock_exit:
                     from workers.user_sync import main
+
                     main()
                     # Should call sys.exit(1) on exception
                     mock_exit.assert_called_with(1)

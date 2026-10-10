@@ -59,7 +59,7 @@ func NewRedisFromURL(url string) (*RedisClient, error) {
 	}
 
 	if url == "" {
-		return nil, fmt.Errorf("Redis URL not provided")
+		return nil, fmt.Errorf("no Redis URL provided")
 	}
 
 	opts, err := redis.ParseURL(url)
