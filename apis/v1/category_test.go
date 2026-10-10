@@ -1,33 +1,97 @@
 package v1
 
-import "testing"
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"testing"
+)
 
-// controllerTypes is the exact set the k8s-controller switch dispatches
-// (dataresource_controller.go create-path switch). The mapping must cover
-// all of them and nothing else.
-var controllerTypes = []string{
-	"postgres", "mariadb", "mysql", "object", "pvc/block", "pvc/file",
-	"keyvalue", "kafka", "search", "rockfs", "vector", "clickhouse",
-	"timeseries", "warehouse/trino", "lakehouse/iceberg", "nfs", "iscsi",
-	"filesystem",
+// controllerSource is the reconcile file whose type-dispatch switches are the
+// live authority for which spec.type values the controller handles.
+const controllerSource = "../../services/k8s-controller/controllers/dataresource_controller.go"
+
+// controllerSwitchTypes parses the k8s-controller reconcile source and returns
+// the exact, deduplicated set of spec.type values its `switch dr.Spec.Type`
+// statements dispatch. Deriving the set from source (rather than a
+// hand-maintained copy) means a type added to the controller switch but missing
+// from categories.yaml is caught by the sync tests below.
+func controllerSwitchTypes(t *testing.T) []string {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filepath.FromSlash(controllerSource), nil, 0)
+	if err != nil {
+		t.Fatalf("parse controller source %q: %v", controllerSource, err)
+	}
+
+	// isSpecType reports whether an expression is `<x>.Spec.Type`.
+	isSpecType := func(e ast.Expr) bool {
+		outer, ok := e.(*ast.SelectorExpr)
+		if !ok || outer.Sel.Name != "Type" {
+			return false
+		}
+		inner, ok := outer.X.(*ast.SelectorExpr)
+		return ok && inner.Sel.Name == "Spec"
+	}
+
+	seen := map[string]bool{}
+	ast.Inspect(file, func(n ast.Node) bool {
+		sw, ok := n.(*ast.SwitchStmt)
+		if !ok || sw.Tag == nil || !isSpecType(sw.Tag) {
+			return true
+		}
+		for _, stmt := range sw.Body.List {
+			clause, ok := stmt.(*ast.CaseClause)
+			if !ok {
+				continue
+			}
+			for _, expr := range clause.List {
+				lit, ok := expr.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				val, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					t.Fatalf("unquote case literal %q: %v", lit.Value, err)
+				}
+				seen[val] = true
+			}
+		}
+		return true
+	})
+
+	if len(seen) == 0 {
+		t.Fatalf("no `switch dr.Spec.Type` case types found in %q", controllerSource)
+	}
+
+	out := make([]string, 0, len(seen))
+	for ty := range seen {
+		out = append(out, ty)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func TestEveryControllerTypeHasCategory(t *testing.T) {
-	for _, ty := range controllerTypes {
+	for _, ty := range controllerSwitchTypes(t) {
 		if _, ok := CategoryForType(ty); !ok {
-			t.Fatalf("type %q has no category in categories.yaml", ty)
+			t.Fatalf("type %q dispatched by the controller switch has no category in categories.yaml", ty)
 		}
 	}
 }
 
 func TestNoUnknownTypesInMapping(t *testing.T) {
 	known := map[string]bool{}
-	for _, ty := range controllerTypes {
+	for _, ty := range controllerSwitchTypes(t) {
 		known[ty] = true
 	}
 	for ty := range TypeToCategory {
 		if !known[ty] {
-			t.Fatalf("mapping has type %q not dispatched by the controller", ty)
+			t.Fatalf("mapping has type %q not dispatched by the controller switch", ty)
 		}
 	}
 }

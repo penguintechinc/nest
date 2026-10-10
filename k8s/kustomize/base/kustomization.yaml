@@ -41,6 +41,7 @@ resources:
   - nest-gateway/service.yaml
   - nest-manager/deployment.yaml
   - nest-manager/service.yaml
+  - nest-saga-engine/service.yaml
   - nest-db-proxy
   - nest-velero
   - network-policies

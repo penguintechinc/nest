@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nest-saga-engine
+  namespace: nest
+  labels:
+    app: nest-saga-engine
+    app.kubernetes.io/name: nest-saga-engine
+    app.kubernetes.io/part-of: nest
+spec:
+  type: ClusterIP
+  selector:
+    app: nest-saga-engine
+  ports:
+  - name: http
+    port: 50055
+    targetPort: http
+    protocol: TCP

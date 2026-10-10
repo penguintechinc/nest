@@ -5,7 +5,12 @@ import time
 import uuid
 from datetime import datetime
 
-from handlers.probe import extract_host_port, tcp_ping
+from handlers.probe import (
+    BlockedTargetError,
+    extract_host_port,
+    resolve_public_target,
+    tcp_ping,
+)
 from kubernetes import client, config
 from middleware import AuditEvent, emit_audit, get_claims, get_tenant
 from models import OperationRecord
@@ -318,7 +323,35 @@ async def introspect_imported_resource(store: Store):
         )
 
     host, port = host_port
-    reachable, latency_ms, message = await tcp_ping(host, port, timeout=5.0)
+
+    # SSRF / internal port-scan guard: resolve the host and reject any target
+    # that maps to a loopback, link-local/metadata, private, or otherwise
+    # non-public address. Connect to the validated IP to defeat DNS rebind.
+    try:
+        target_ip = await resolve_public_target(host, port, timeout=5.0)
+    except BlockedTargetError as e:
+        return (
+            jsonify(
+                {
+                    "code": "nest.dataresource.blocked_target",
+                    "message": str(e),
+                    "requestId": request_id,
+                }
+            ),
+            400,
+        )
+
+    if target_ip is None:
+        return jsonify(
+            {
+                "resource": name,
+                "reachable": False,
+                "latencyMs": 0,
+                "message": "could not resolve host",
+            }
+        )
+
+    reachable, latency_ms, message = await tcp_ping(target_ip, port, timeout=5.0)
 
     return jsonify(
         {

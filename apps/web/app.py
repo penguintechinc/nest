@@ -297,15 +297,30 @@ def admin():
 @action.uses("profile.html", auth.user, db)
 def profile():
     """User profile page."""
+    # Fields a user may edit on their own account via this self-service form.
+    # Privilege-relevant fields (role, is_active) and system fields
+    # (username, email, created_on) are deliberately excluded: allowing them
+    # here would let a normal user mass-assign role=admin (or re-activate a
+    # disabled account) by crafting a POST, escalating to the admin panel.
+    SELF_EDITABLE_FIELDS = ["first_name", "last_name"]
+
     form = Form(
         db.users,
         record=auth.user,
         formstyle=FormStyleBulma,
+        # Only render/accept the editable fields plus the identity fields shown
+        # read-only; role/is_active/created_on are not part of the form at all,
+        # so they cannot be submitted through it.
+        fields=SELF_EDITABLE_FIELDS + ["username", "email"],
         readonly=["username", "email"],  # Don't allow changing these
     )
 
     if form.accepted:
-        auth.user.update(form.vars)
+        # Defense in depth: persist only the allowlisted self-editable fields,
+        # never request-derived privileged fields such as role/is_active, even
+        # if they are somehow present in form.vars.
+        safe_vars = {k: v for k, v in form.vars.items() if k in SELF_EDITABLE_FIELDS}
+        auth.user.update(safe_vars)
         db.commit()
         response.flash = "Profile updated successfully"
         redirect(URL("profile"))

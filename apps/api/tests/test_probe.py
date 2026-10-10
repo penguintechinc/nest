@@ -1,10 +1,17 @@
 """Tests for TCP probe utilities."""
 
 import asyncio
+import socket
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from handlers.probe import extract_host_port, tcp_ping
+from handlers.probe import (
+    BlockedTargetError,
+    _blocked_ip_reason,
+    extract_host_port,
+    resolve_public_target,
+    tcp_ping,
+)
 
 
 class TestExtractHostPort:
@@ -230,3 +237,74 @@ class TestTcpPing:
             assert len(calls) == 5
             assert calls[0][0] == ("localhost", 80)
             assert calls[-1][0] == ("localhost", 9200)
+
+
+def _addrinfo(ip, port=5432, family=socket.AF_INET):
+    """Build a getaddrinfo-style tuple for the given IP."""
+    sockaddr = (ip, port) if family == socket.AF_INET else (ip, port, 0, 0)
+    return (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sockaddr)
+
+
+class TestBlockedIpReason:
+    """Tests for the SSRF address classifier."""
+
+    @pytest.mark.parametrize(
+        "ip",
+        [
+            "127.0.0.1",  # loopback
+            "::1",  # loopback v6
+            "169.254.169.254",  # cloud metadata (link-local)
+            "fd00:ec2::254",  # IPv6 cloud metadata (ULA)
+            "10.0.0.5",  # RFC1918
+            "172.16.0.1",  # RFC1918
+            "192.168.1.1",  # RFC1918
+            "100.64.0.1",  # CGNAT
+            "0.0.0.0",  # unspecified
+            "224.0.0.1",  # multicast
+            "::ffff:10.0.0.1",  # IPv4-mapped private
+        ],
+    )
+    def test_internal_addresses_blocked(self, ip):
+        assert _blocked_ip_reason(ip) is not None
+
+    @pytest.mark.parametrize("ip", ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"])
+    def test_public_addresses_allowed(self, ip):
+        assert _blocked_ip_reason(ip) is None
+
+
+class TestResolvePublicTarget:
+    """Tests for the SSRF-guarding resolver used by introspect."""
+
+    @pytest.mark.asyncio
+    async def test_public_host_allowed(self):
+        with patch("asyncio.get_event_loop") as mock_loop:
+            loop = mock_loop.return_value
+            loop.getaddrinfo = AsyncMock(return_value=[_addrinfo("93.184.216.34")])
+            ip = await resolve_public_target("example.com", 5432)
+            assert ip == "93.184.216.34"
+
+    @pytest.mark.asyncio
+    async def test_metadata_host_blocked(self):
+        with patch("asyncio.get_event_loop") as mock_loop:
+            loop = mock_loop.return_value
+            loop.getaddrinfo = AsyncMock(return_value=[_addrinfo("169.254.169.254")])
+            with pytest.raises(BlockedTargetError):
+                await resolve_public_target("metadata.internal", 80)
+
+    @pytest.mark.asyncio
+    async def test_mixed_record_set_blocked(self):
+        # A public decoy mixed with an internal address must still be rejected.
+        with patch("asyncio.get_event_loop") as mock_loop:
+            loop = mock_loop.return_value
+            loop.getaddrinfo = AsyncMock(
+                return_value=[_addrinfo("8.8.8.8"), _addrinfo("10.0.0.5")]
+            )
+            with pytest.raises(BlockedTargetError):
+                await resolve_public_target("rebind.example", 5432)
+
+    @pytest.mark.asyncio
+    async def test_resolution_failure_returns_none(self):
+        with patch("asyncio.get_event_loop") as mock_loop:
+            loop = mock_loop.return_value
+            loop.getaddrinfo = AsyncMock(side_effect=OSError("no such host"))
+            assert await resolve_public_target("nxdomain.invalid", 5432) is None

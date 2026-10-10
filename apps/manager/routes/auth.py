@@ -15,8 +15,11 @@ Port notes:
 
 import asyncio
 import hashlib
+import hmac
 import logging
 from typing import Any
+
+_WERKZEUG_HASH_PREFIXES = ("pbkdf2:", "scrypt:", "bcrypt:")
 
 from penguin_dal.quart_ext import get_db
 from quart import Blueprint, g, jsonify, request
@@ -41,11 +44,17 @@ def _verify_password(stored_hash: str, plaintext: str) -> bool:
     2. SHA-256 hex strings (legacy accounts created by the Go API service).
     """
     # Werkzeug hashes start with "pbkdf2:" or "scrypt:" etc.
-    if stored_hash.startswith(("pbkdf2:", "scrypt:", "bcrypt:")):
+    if stored_hash.startswith(_WERKZEUG_HASH_PREFIXES):
         return check_password_hash(stored_hash, plaintext)
-    # Fall back to SHA-256 for Go-API–created accounts
+    # Fall back to SHA-256 for Go-API–created accounts.
+    # Use a constant-time compare to avoid a timing side channel.
     sha_hash = hashlib.sha256(plaintext.encode()).hexdigest()
-    return stored_hash == sha_hash
+    return hmac.compare_digest(stored_hash, sha_hash)
+
+
+def _is_legacy_hash(stored_hash: str) -> bool:
+    """True when the stored hash uses the weak legacy SHA-256 scheme."""
+    return not (stored_hash or "").startswith(_WERKZEUG_HASH_PREFIXES)
 
 
 def _user_to_dict(user: Any) -> dict:
@@ -109,6 +118,25 @@ async def login() -> tuple:
 
     if not _verify_password(user.password_hash, password):
         return jsonify({"error": "invalid username or password"}), 401
+
+    # Transparently upgrade legacy unsalted SHA-256 hashes to werkzeug pbkdf2
+    # on successful login. This is backward compatible and never blocks login:
+    # any failure to persist the upgrade is logged and ignored.
+    if _is_legacy_hash(user.password_hash):
+        new_hash = generate_password_hash(password)
+        user_id = int(user.id)
+
+        def _upgrade_hash() -> None:
+            db = get_db()
+            db(db.users.id == user_id).update(password_hash=new_hash)
+            db.commit()
+
+        try:
+            await asyncio.to_thread(_upgrade_hash)
+        except Exception:  # pragma: no cover - best-effort migration
+            logger.warning(
+                "Failed to upgrade legacy password hash for user id=%d", user_id
+            )
 
     # Determine role for token; fall back to "viewer" for legacy rows.
     role: str = getattr(user, "role", None) or "viewer"

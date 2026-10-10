@@ -310,7 +310,11 @@ class TestIntrospectImportedResource:
         )
         await shared_client.store.create_data_resource(dr)
 
-        with patch("handlers.import_handler.tcp_ping") as mock_ping:
+        with (
+            patch("handlers.import_handler.tcp_ping") as mock_ping,
+            patch("handlers.import_handler.resolve_public_target") as mock_resolve,
+        ):
+            mock_resolve.return_value = "93.184.216.34"
             # Simulate a network error
             mock_ping.return_value = (False, 1500, "Name or service not known")
 
@@ -347,7 +351,11 @@ class TestIntrospectImportedResource:
         )
         await shared_client.store.create_data_resource(dr)
 
-        with patch("handlers.import_handler.tcp_ping") as mock_ping:
+        with (
+            patch("handlers.import_handler.tcp_ping") as mock_ping,
+            patch("handlers.import_handler.resolve_public_target") as mock_resolve,
+        ):
+            mock_resolve.return_value = "93.184.216.34"
             mock_ping.return_value = (True, 42, "tcp connection successful")
 
             response = await shared_client.post(
@@ -382,7 +390,11 @@ class TestIntrospectImportedResource:
         )
         await shared_client.store.create_data_resource(dr)
 
-        with patch("handlers.import_handler.tcp_ping") as mock_ping:
+        with (
+            patch("handlers.import_handler.tcp_ping") as mock_ping,
+            patch("handlers.import_handler.resolve_public_target") as mock_resolve,
+        ):
+            mock_resolve.return_value = "93.184.216.34"
             mock_ping.return_value = (False, 5000, "connection timeout after 5.0s")
 
             response = await shared_client.post(
@@ -415,7 +427,11 @@ class TestIntrospectImportedResource:
         )
         await shared_client.store.create_data_resource(dr)
 
-        with patch("handlers.import_handler.tcp_ping") as mock_ping:
+        with (
+            patch("handlers.import_handler.tcp_ping") as mock_ping,
+            patch("handlers.import_handler.resolve_public_target") as mock_resolve,
+        ):
+            mock_resolve.return_value = "93.184.216.34"
             mock_ping.return_value = (
                 False,
                 10,
@@ -451,7 +467,11 @@ class TestIntrospectImportedResource:
         )
         await shared_client.store.create_data_resource(dr)
 
-        with patch("handlers.import_handler.tcp_ping") as mock_ping:
+        with (
+            patch("handlers.import_handler.tcp_ping") as mock_ping,
+            patch("handlers.import_handler.resolve_public_target") as mock_resolve,
+        ):
+            mock_resolve.return_value = "93.184.216.34"
             mock_ping.return_value = (True, 10, "ok")
 
             response = await shared_client.post(
@@ -459,9 +479,10 @@ class TestIntrospectImportedResource:
                 headers={"Authorization": f"Bearer {bearer_token}"},
             )
 
-        # Verify tcp_ping was called with primary host
-        mock_ping.assert_called_once()
-        call_args = mock_ping.call_args[0]
+        # The primary host is selected and passed to the SSRF resolver; tcp_ping
+        # then connects to the validated IP, so the host is asserted on resolve.
+        mock_resolve.assert_called_once()
+        call_args = mock_resolve.call_args[0]
         assert call_args[0] == "primary.db"
         assert call_args[1] == 5432
 
@@ -487,7 +508,11 @@ class TestIntrospectImportedResource:
         )
         await shared_client.store.create_data_resource(dr)
 
-        with patch("handlers.import_handler.tcp_ping") as mock_ping:
+        with (
+            patch("handlers.import_handler.tcp_ping") as mock_ping,
+            patch("handlers.import_handler.resolve_public_target") as mock_resolve,
+        ):
+            mock_resolve.return_value = "93.184.216.34"
             mock_ping.return_value = (True, 25, "ok")
 
             response = await shared_client.post(
@@ -495,8 +520,8 @@ class TestIntrospectImportedResource:
                 headers={"Authorization": f"Bearer {bearer_token}"},
             )
 
-        mock_ping.assert_called_once()
-        call_args = mock_ping.call_args[0]
+        mock_resolve.assert_called_once()
+        call_args = mock_resolve.call_args[0]
         assert call_args[0] == "fallback.db"
 
     @pytest.mark.asyncio
@@ -519,7 +544,11 @@ class TestIntrospectImportedResource:
         )
         await shared_client.store.create_data_resource(dr)
 
-        with patch("handlers.import_handler.tcp_ping") as mock_ping:
+        with (
+            patch("handlers.import_handler.tcp_ping") as mock_ping,
+            patch("handlers.import_handler.resolve_public_target") as mock_resolve,
+        ):
+            mock_resolve.return_value = "93.184.216.34"
             mock_ping.return_value = (True, 5, "ok")
 
             response = await shared_client.post(
@@ -527,8 +556,8 @@ class TestIntrospectImportedResource:
                 headers={"Authorization": f"Bearer {bearer_token}"},
             )
 
-        mock_ping.assert_called_once()
-        call_args = mock_ping.call_args[0]
+        mock_resolve.assert_called_once()
+        call_args = mock_resolve.call_args[0]
         assert call_args[1] == 5432  # Default PostgreSQL port
 
     @pytest.mark.asyncio
