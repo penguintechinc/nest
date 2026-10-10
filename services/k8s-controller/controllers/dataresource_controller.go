@@ -103,6 +103,21 @@ func (r *DataResourceReconciler) reconcileCreate(ctx context.Context, dr *nestv1
 		}
 	}
 
+	// Defense in depth: the CRD CEL rejects type/category mismatches at
+	// admission, but a CR can be written by a client that bypasses admission
+	// plugins, so re-validate here before provisioning anything. This runs
+	// ahead of the external-origination branch so externally-originated
+	// resources get the same controller-side validation.
+	if dr.Spec.Category != "" {
+		if cat, ok := nestv1.CategoryForType(dr.Spec.Type); !ok || cat != dr.Spec.Category {
+			err := fmt.Errorf("type %q is not a member of category %q", dr.Spec.Type, dr.Spec.Category)
+			logger.Error(err, "type/category validation failed")
+			r.setPhase(dr, nestv1.PhaseFailed, err.Error())
+			_ = r.Status().Update(ctx, dr)
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Handle external resources first
 	if dr.Spec.Origination == nestv1.OriginationExternal {
 		if err := r.reconcileExternal(ctx, dr); err != nil {
@@ -116,25 +131,6 @@ func (r *DataResourceReconciler) reconcileCreate(ctx context.Context, dr *nestv1
 			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
-	}
-
-	// Defense in depth: the CRD CEL rejects type/category mismatches at
-	// admission, but a CR can be written by a client that bypasses admission
-	// plugins, so re-validate here before provisioning anything.
-	if dr.Spec.Category != "" {
-		if cat, ok := nestv1.CategoryForType(dr.Spec.Type); !ok || cat != dr.Spec.Category {
-			dr.Status.Phase = nestv1.PhaseFailed
-			meta.SetStatusCondition(&dr.Status.Conditions, metav1.Condition{
-				Type:    "Validated",
-				Status:  metav1.ConditionFalse,
-				Reason:  "TypeCategoryMismatch",
-				Message: fmt.Sprintf("type %q is not a member of category %q", dr.Spec.Type, dr.Spec.Category),
-			})
-			if uerr := r.Status().Update(ctx, dr); uerr != nil {
-				return ctrl.Result{}, uerr
-			}
-			return ctrl.Result{}, fmt.Errorf("type %q not in category %q", dr.Spec.Type, dr.Spec.Category)
-		}
 	}
 
 	// Dispatch to engine-specific provisioner

@@ -201,20 +201,27 @@ jobs:
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip
-        # Root requirements.txt is a placeholder only (see its header comment) —
-        # the actual deps the pytest step below imports live per-app. Each
-        # uv-compiled lockfile is installed via its own `pip install -r`
-        # invocation rather than combined into one command: their hash-pinned
-        # transitive deps diverge (e.g. grpcio/protobuf/alembic versions differ
-        # between apps/api and apps/manager), and pip's hash-checking mode
-        # requires a single fully-consistent resolution across everything
-        # passed to one invocation.
-        pip install -r apps/api/requirements.txt
-        pip install -r apps/manager/requirements.txt
         # ruff is the single Python linter/formatter/import-sorter (replaces the
         # former black + isort + flake8). Pinned to the same version the local
         # pre-commit hook uses (.pre-commit-config.yaml) so CI and local agree.
-        pip install pytest pytest-cov pytest-asyncio ruff==0.8.4 mypy
+        # ruff/mypy are repo-wide dev tools (not app runtime deps), so they go in
+        # the interpreter itself where the lint/type steps below invoke them.
+        pip install ruff==0.8.4 mypy
+        # Root requirements.txt is a placeholder only (see its header comment) —
+        # the actual deps the pytest step below imports live per-app. Each app is
+        # installed into its OWN virtualenv: their hash-pinned transitive deps
+        # diverge (e.g. grpcio/protobuf/alembic versions differ between apps/api
+        # and apps/manager), so installing both into one environment lets the
+        # second install silently win and tests the wrong resolution. Separate
+        # venvs give each app exactly the dependency set it pins.
+        python3 -m venv .venv-api
+        .venv-api/bin/pip install --upgrade pip
+        .venv-api/bin/pip install -r apps/api/requirements.txt
+        .venv-api/bin/pip install pytest pytest-cov pytest-asyncio
+        python3 -m venv .venv-manager
+        .venv-manager/bin/pip install --upgrade pip
+        .venv-manager/bin/pip install -r apps/manager/requirements.txt
+        .venv-manager/bin/pip install pytest pytest-cov pytest-asyncio
 
     - name: Run ruff (format check + lint)
       run: |
@@ -242,10 +249,10 @@ jobs:
         # fix/ci-pipeline PR description.
         set -euo pipefail
         cd apps/api
-        python3 -m pytest --cov=. --cov-report=xml:"$GITHUB_WORKSPACE/coverage-api.xml" \
+        "$GITHUB_WORKSPACE/.venv-api/bin/python" -m pytest --cov=. --cov-report=xml:"$GITHUB_WORKSPACE/coverage-api.xml" \
           --junitxml="$GITHUB_WORKSPACE/test-results-api.xml"
         cd ../manager
-        python3 -m pytest --cov=. --cov-report=xml:"$GITHUB_WORKSPACE/coverage-manager.xml" \
+        "$GITHUB_WORKSPACE/.venv-manager/bin/python" -m pytest --cov=. --cov-report=xml:"$GITHUB_WORKSPACE/coverage-manager.xml" \
           --junitxml="$GITHUB_WORKSPACE/test-results-manager.xml"
       env:
         DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db

@@ -81,6 +81,9 @@ repos:
         # Test files legitimately use asserts (B101) and fixture credentials
         # (B105/B106); bandit scans application code, not tests.
         exclude: '(^|/)(tests|tests_workers)/|(^|/)(conftest|test_[^/]+)\.py$'
+        # Match the CI gate (ci.yml bandit step) so local pre-push and CI agree;
+        # without a threshold the hook over-flags low-severity noise (B104/B310).
+        args: [--severity-level, high, --confidence-level, high]
         stages: [pre-push]
 
   - repo: local
