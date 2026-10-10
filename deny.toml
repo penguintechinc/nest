@@ -16,6 +16,9 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    # OSI-approved; pulled in transitively via `tracing` -> `syn`/`proc-macro2`
+    # -> `unicode-ident` once nest-gating depends on `tracing` (Task 2).
+    "Unicode-3.0",
 ]
 confidence-threshold = 0.8
 

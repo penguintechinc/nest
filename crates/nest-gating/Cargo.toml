@@ -3,7 +3,22 @@ name = "nest-gating"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
-description = "Feature/license gating primitives shared by Nest Rust services (placeholder — fleshed out in a later task)."
+description = "Fail-safe two-layer category gate (PostHog rollout flag + license tier) shared by Nest's Rust services."
 publish = false
 
+[features]
+default = []
+# Enables the default, network-backed `PostHogFlagProvider`/`LicenseTierProvider`.
+# Off by default so `cargo test -p nest-gating` never requires network access —
+# consumers that only need `Gate` with their own providers never pull in an
+# HTTP client either.
+posthog-client = ["ureq", "serde", "serde_json"]
+
 [dependencies]
+anyhow = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+# Pinned exact version; blocking (sync) client matches the sync FlagProvider/
+# TierProvider trait signatures without pulling a second async runtime in.
+ureq = { version = "3.4.2", default-features = false, features = ["rustls", "json"], optional = true }
