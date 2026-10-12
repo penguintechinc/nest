@@ -30,3 +30,15 @@ def test_validation_adapter_blocks_ssrf_ids() -> None:
     for bad in ["Orders", "a" * 64, "-a", "a-", "a..b"]:
         with pytest.raises(ValueError):
             validate_dns_label(bad)
+
+
+def test_dns_label_boundaries() -> None:
+    """63-char and single-char labels pass; empty and non-str input are rejected."""
+    from adapters.validation import validate_dns_label
+
+    assert validate_dns_label("a" * 63) == "a" * 63
+    assert validate_dns_label("a") == "a"
+    assert validate_dns_label("0") == "0"
+    for bad in ["", None, 123, b"abc", ["a"]]:
+        with pytest.raises(ValueError):
+            validate_dns_label(bad)  # type: ignore[arg-type]
