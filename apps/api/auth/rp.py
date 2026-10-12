@@ -22,6 +22,8 @@ ALLOWED_ALGORITHMS: tuple[str, ...] = ("RS256", "ES256")
 REQUIRED_CLAIMS: tuple[str, ...] = ("exp", "iat", "iss", "aud", "sub")
 TIER_CLAIM = "https://nest.penguintech.io/tier"
 DEFAULT_TIER = "free"
+# A resource server never performs a code exchange, so it holds no client secret.
+_NO_CLIENT_SECRET = ""
 
 
 class HardenedRP(OIDCRelyingParty):
@@ -48,7 +50,7 @@ class HardenedRP(OIDCRelyingParty):
         config = OIDCRPConfig(
             issuer_url=issuer,
             client_id=audience,
-            client_secret="",  # noqa: S106 - resource server never performs a code exchange
+            client_secret=_NO_CLIENT_SECRET,
             redirect_url=issuer,
             algorithms=list(ALLOWED_ALGORITHMS),
         )
@@ -64,7 +66,8 @@ class HardenedRP(OIDCRelyingParty):
             else:
                 await self.discover()
                 client = self._jwks_client
-        assert client is not None
+        if client is None:
+            raise RuntimeError("JWKS client unavailable after discovery")
         signing_key = await asyncio.to_thread(
             client.get_signing_key_from_jwt, raw_token
         )
