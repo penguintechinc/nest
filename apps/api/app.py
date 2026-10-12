@@ -2,16 +2,23 @@
 
 import logging
 import uuid
+from dataclasses import asdict
 from datetime import datetime, timezone
+from typing import Any, cast
 
 from opentelemetry import trace
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from quart import Quart, current_app, g, jsonify, request
+from quart import Quart, Response, current_app, g, jsonify, request
 
 _api_logger = logging.getLogger("nest.api")
 _tracer = trace.get_tracer("nest-api")
 
+from adapters.limiter import RateLimiter
+from auth.authz import require_scope, tenant_path_guard
+from auth.rp import AsgiClaimsAdapter, HardenedRP
+from auth.stack import PUBLIC_PATHS, build_asgi_stack, principal_from_claims
 from catalog import CATALOG
+from dto.problem import Problem, ProblemError
 from handlers import (
     create_data_resource,
     create_protection_policy,
@@ -36,12 +43,9 @@ from handlers.import_handler import (
     restore_data_resource,
     snapshot_data_resource,
 )
-from middleware import (
-    check_rate_limit,
-    get_claims,
-    tenant_middleware,
-)
 from store import MemoryStore, Store
+
+from k8s.repository import CrdRepository
 
 # Prometheus metrics
 requests_total = Counter(
@@ -57,21 +61,44 @@ request_duration = Histogram(
 )
 
 
-def create_app(store: Store | None = None) -> Quart:
-    """Create and configure the Quart application."""
-    app = Quart(__name__)
+def create_app(
+    store: Store | None = None,
+    *,
+    repo: CrdRepository | None = None,
+    limiter: RateLimiter | None = None,
+    rp: Any | None = None,
+) -> Quart:
+    """Create and configure the Quart application.
+
+    Args:
+        store: Persistence backend (defaults to an in-memory store).
+        repo: CRD access layer seam; the concrete implementation lands in Task 12.
+        limiter: Rate limiter for the ASGI layer (wired in Task 9).
+        rp: Token verifier exposing ``async verify_token(raw) -> Mapping``; defaults to the
+            env-configured ``HardenedRP``.
+    """
+    # No static route: every URL on this service is authenticated API surface.
+    app = Quart(__name__, static_folder=None)
 
     if store is None:
         store = MemoryStore()
 
     # Store instance accessible in handlers
     app.config["STORE"] = store
+    app.config["REPO"] = repo
 
     @app.before_request
-    async def before_request():
-        """Per-request setup: generate request ID, start timer, log start."""
+    async def bridge_request() -> None:
+        """Per-request setup: request ID, timer, and the validated claims -> Principal bridge.
+
+        Runs first so ``tenant_path_guard`` (registered next) always sees ``g.principal``.
+        """
         g.request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         g.start_time = datetime.now(timezone.utc)
+        state: dict[str, Any] = cast(dict[str, Any], request.scope).get("state") or {}
+        claims = state.get("claims")
+        if claims is not None:
+            g.principal = principal_from_claims(claims)
 
         _api_logger.debug(
             "request.start",
@@ -82,55 +109,23 @@ def create_app(store: Store | None = None) -> Quart:
             },
         )
 
-        # Attach tenant to current span when available
-        tenant = getattr(g, "tenant", None)
-        if tenant:
-            span = trace.get_current_span()
-            span.set_attribute("tenant", tenant)
+        principal = getattr(g, "principal", None)
+        if principal is not None:
+            trace.get_current_span().set_attribute("tenant", principal.tenant)
 
-    async def auth_middleware(required_scope: str | None = None) -> None:
-        """Combined auth + rate-limit middleware called per authenticated route.
+    app.before_request(tenant_path_guard)
 
-        Args:
-            required_scope: Optional scope to validate. If provided, raises Forbidden if token lacks it.
-        """
-        await tenant_middleware()
-        await check_rate_limit()
-
-        if required_scope:
-            claims = get_claims()
-            request_id = getattr(g, "request_id", str(uuid.uuid4()))
-
-            if not claims:
-                from werkzeug.exceptions import Forbidden
-
-                raise Forbidden(
-                    response={
-                        "code": "nest.auth.scope_denied",
-                        "message": "Authentication required",
-                        "requestId": request_id,
-                        "docsUrl": "https://docs.nest.penguintech.io/errors/nest.auth.scope_denied",
-                    }
-                )
-
-            # Check if token has the scope or admin scope
-            has_scope = False
-            for s in claims.scopes:
-                if s == required_scope or s == "nest:*:admin":
-                    has_scope = True
-                    break
-
-            if not has_scope:
-                from werkzeug.exceptions import Forbidden
-
-                raise Forbidden(
-                    response={
-                        "code": "nest.auth.scope_denied",
-                        "message": f"Insufficient scope: {required_scope} required",
-                        "requestId": request_id,
-                        "docsUrl": "https://docs.nest.penguintech.io/errors/nest.auth.scope_denied",
-                    }
-                )
+    @app.errorhandler(ProblemError)
+    async def handle_problem(e: ProblemError) -> tuple[Response, int]:
+        """Render a ProblemError (401/403/...) as the RFC 7807-style Problem body."""
+        request_id = getattr(g, "request_id", str(uuid.uuid4()))
+        problem = Problem(
+            code=e.code,
+            message=e.message,
+            requestId=request_id,
+            docsUrl=f"https://docs.nest.penguintech.io/errors/{e.code}",
+        )
+        return jsonify(asdict(problem)), e.status
 
     @app.after_request
     async def after_request(response):
@@ -232,15 +227,15 @@ def create_app(store: Store | None = None) -> Quart:
 
     # Authenticated API endpoints
     @app.route("/api/v1/catalog", methods=["GET"])
+    @require_scope("catalog:read")
     async def catalog():
         """List available resource types."""
-        await auth_middleware(required_scope="nest:catalog:read")
         return jsonify({"types": CATALOG, "meta": {"version": 1}})
 
     @app.route("/api/v1/versions", methods=["GET"])
+    @require_scope("catalog:read")
     async def versions():
         """API version discovery."""
-        await auth_middleware(required_scope="nest:catalog:read")
         return jsonify(
             {
                 "versions": [
@@ -255,69 +250,69 @@ def create_app(store: Store | None = None) -> Quart:
 
     # DataResource CRUD
     @app.route("/api/v1/tenants/<tenant_id>/data-resources", methods=["GET"])
+    @require_scope("dataresource:read")
     async def list_dr(tenant_id: str):
         """List DataResources for a tenant."""
-        await auth_middleware(required_scope="nest:dataresource:read")
         return await list_data_resources(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/data-resources", methods=["POST"])
+    @require_scope("dataresource:write")
     async def create_dr(tenant_id: str):
         """Create a DataResource."""
-        await auth_middleware(required_scope="nest:dataresource:write")
         return await create_data_resource(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/data-resources/<name>", methods=["GET"])
+    @require_scope("dataresource:read")
     async def get_dr(tenant_id: str, name: str):
         """Get a DataResource."""
-        await auth_middleware(required_scope="nest:dataresource:read")
         return await get_data_resource(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/data-resources/<name>", methods=["DELETE"])
+    @require_scope("dataresource:delete")
     async def delete_dr(tenant_id: str, name: str):
         """Delete a DataResource."""
-        await auth_middleware(required_scope="nest:dataresource:delete")
         return await delete_data_resource(store)
 
     # LRO operations
     @app.route(
         "/api/v1/tenants/<tenant_id>/data-resources/<name>/snapshot", methods=["POST"]
     )
+    @require_scope("dataresource:write")
     async def snapshot_dr(tenant_id: str, name: str):
         """Snapshot a DataResource."""
-        await auth_middleware(required_scope="nest:dataresource:write")
         return await snapshot_data_resource(store)
 
     @app.route(
         "/api/v1/tenants/<tenant_id>/data-resources/<name>/restore", methods=["POST"]
     )
+    @require_scope("dataresource:write")
     async def restore_dr(tenant_id: str, name: str):
         """Restore a DataResource."""
-        await auth_middleware(required_scope="nest:dataresource:write")
         return await restore_data_resource(store)
 
     @app.route(
         "/api/v1/tenants/<tenant_id>/data-resources/<name>/introspect",
         methods=["POST"],
     )
+    @require_scope("dataresource:read")
     async def introspect_dr(tenant_id: str, name: str):
         """Introspect an imported DataResource."""
-        await auth_middleware(required_scope="nest:dataresource:read")
         return await introspect_imported_resource(store)
 
     @app.route(
         "/api/v1/tenants/<tenant_id>/data-resources/<name>/migrate",
         methods=["POST"],
     )
+    @require_scope("dataresource:write")
     async def migrate_dr(tenant_id: str, name: str):
         """Migrate a DataResource to managed."""
-        await auth_middleware(required_scope="nest:dataresource:write")
         return await migrate_to_managed(store)
 
     # Operations (LRO status)
     @app.route("/api/v1/tenants/<tenant_id>/operations/<op_id>", methods=["GET"])
+    @require_scope("operations:read")
     async def get_operation(tenant_id: str, op_id: str):
         """Get operation status."""
-        await auth_middleware(required_scope="nest:operations:read")
         request_id = getattr(g, "request_id", str(uuid.uuid4()))
         store = current_app.config["STORE"]
         try:
@@ -338,88 +333,92 @@ def create_app(store: Store | None = None) -> Quart:
 
     # VolumeSnapshot routes
     @app.route("/api/v1/tenants/<tenant_id>/snapshots", methods=["GET"])
+    @require_scope("snapshot:read")
     async def list_snapshots_route(tenant_id: str):
         """List VolumeSnapshots for a tenant."""
-        await auth_middleware(required_scope="nest:snapshot:read")
         return await list_snapshots(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/snapshots", methods=["POST"])
+    @require_scope("snapshot:write")
     async def create_snapshot_route(tenant_id: str):
         """Create a VolumeSnapshot."""
-        await auth_middleware(required_scope="nest:snapshot:write")
         return await create_snapshot(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/snapshots/<name>", methods=["DELETE"])
+    @require_scope("snapshot:delete")
     async def delete_snapshot_route(tenant_id: str, name: str):
         """Delete a VolumeSnapshot."""
-        await auth_middleware(required_scope="nest:snapshot:delete")
         return await delete_snapshot(store)
 
     # DataProtectionPolicy routes
     @app.route("/api/v1/tenants/<tenant_id>/protection-policies", methods=["GET"])
+    @require_scope("policy:read")
     async def list_policies_route(tenant_id: str):
         """List DataProtectionPolicies for a tenant."""
-        await auth_middleware(required_scope="nest:policy:read")
         return await list_protection_policies(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/protection-policies", methods=["POST"])
+    @require_scope("policy:write")
     async def create_policy_route(tenant_id: str):
         """Create a DataProtectionPolicy."""
-        await auth_middleware(required_scope="nest:policy:write")
         return await create_protection_policy(store)
 
     @app.route(
         "/api/v1/tenants/<tenant_id>/protection-policies/<name>", methods=["DELETE"]
     )
+    @require_scope("policy:delete")
     async def delete_policy_route(tenant_id: str, name: str):
         """Delete a DataProtectionPolicy."""
-        await auth_middleware(required_scope="nest:policy:delete")
         return await delete_protection_policy(store)
 
     # SearchPool routes
     @app.route("/api/v1/tenants/<tenant_id>/search-pools", methods=["GET"])
+    @require_scope("searchpool:read")
     async def list_pools_route(tenant_id: str):
         """List SearchPools."""
-        await auth_middleware(required_scope="nest:searchpool:read")
         return await list_search_pools(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/search-pools", methods=["POST"])
+    @require_scope("searchpool:write")
     async def create_pool_route(tenant_id: str):
         """Create a SearchPool."""
-        await auth_middleware(required_scope="nest:searchpool:write")
         return await create_search_pool(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/search-pools/<name>", methods=["GET"])
+    @require_scope("searchpool:read")
     async def get_pool_route(tenant_id: str, name: str):
         """Get a SearchPool."""
-        await auth_middleware(required_scope="nest:searchpool:read")
         return await get_search_pool(store)
 
     @app.route("/api/v1/tenants/<tenant_id>/search-pools/<name>", methods=["DELETE"])
+    @require_scope("searchpool:delete")
     async def delete_pool_route(tenant_id: str, name: str):
         """Delete a SearchPool."""
-        await auth_middleware(required_scope="nest:searchpool:delete")
         return await delete_search_pool(store)
 
     # Cost report routes (proxies to nest-cost-calculator)
     @app.route("/api/v1/tenants/<tenant_id>/cost-report", methods=["GET"])
+    @require_scope("cost:read")
     async def cost_report(tenant_id: str):
         """Return billing history for a tenant."""
-        await auth_middleware(required_scope="nest:cost:read")
         return await get_cost_report(tenant_id)
 
     @app.route("/api/v1/tenants/<tenant_id>/cost-report/summary", methods=["GET"])
+    @require_scope("cost:read")
     async def cost_report_summary(tenant_id: str):
         """Return aggregate billing summary for a tenant."""
-        await auth_middleware(required_scope="nest:cost:read")
         return await get_cost_summary(tenant_id)
 
     # Anomaly detection routes (proxies to nest-anomaly-detector; enterprise/WaddleAI gated)
     @app.route("/api/v1/tenants/<tenant_id>/anomalies", methods=["GET"])
+    @require_scope("anomaly:read")
     async def anomalies(tenant_id: str):
         """Return current anomalies for a tenant's DataResources."""
-        await auth_middleware(required_scope="nest:anomaly:read")
         return await list_anomalies(tenant_id)
+
+    if rp is None:
+        rp = AsgiClaimsAdapter(HardenedRP.from_env())
+    build_asgi_stack(app, rp=rp, limiter=limiter, public_paths=PUBLIC_PATHS)
 
     from telemetry import configure_telemetry
 

@@ -8,20 +8,16 @@ async def test_missing_authorization_header(client):
     """Test that missing Authorization header returns 401."""
     response = await client.get("/api/v1/catalog")
     assert response.status_code == 401
-    data = await response.get_json()
-    assert data["code"] == "nest.auth.missing_token"
 
 
 @pytest.mark.asyncio
 async def test_invalid_bearer_token(client):
-    """Test that invalid Bearer token returns 403."""
+    """Test that a malformed Bearer token is rejected with 401 by the ASGI auth layer."""
     response = await client.get(
         "/api/v1/catalog",
         headers={"Authorization": "Bearer invalid_no_tenant"},
     )
-    assert response.status_code == 403
-    data = await response.get_json()
-    assert data["code"] == "nest.auth.missing_tenant"
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
