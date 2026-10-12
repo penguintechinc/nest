@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar, cast
@@ -29,6 +30,35 @@ class Principal:
     tier: str
     teams: tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        """Validate tenant is a non-empty str and coerce scopes/teams to tuples."""
+        if not isinstance(self.tenant, str) or not self.tenant:
+            raise ValueError("Principal.tenant must be a non-empty string")
+        for name in ("scopes", "teams"):
+            value = getattr(self, name)
+            if value is None or isinstance(value, str):
+                raise ValueError(f"Principal.{name} must be an iterable of strings")
+            try:
+                coerced = tuple(value)
+            except TypeError as exc:
+                raise ValueError(
+                    f"Principal.{name} must be an iterable of strings"
+                ) from exc
+            if not all(isinstance(item, str) for item in coerced):
+                raise ValueError(f"Principal.{name} must contain only strings")
+            object.__setattr__(self, name, coerced)
+
+
+_TENANT_ARGS = frozenset({"tenant_id", "tid", "tenant"})
+_RULE_ARG = re.compile(r"<(?:[^:<>]+:)?([^<>]+)>")
+_TENANTS_SEGMENT = re.compile(r"/tenants/<(?:[^:<>]+:)?([^<>]+)>")
+
+
+def _is_valid_scope(scope: str) -> bool:
+    """Return True if scope is exactly "resource:action" with both parts non-empty."""
+    parts = scope.split(":")
+    return len(parts) == 2 and all(parts)
+
 
 def current_principal() -> Principal:
     """Return the request's Principal or raise 401 if none was established."""
@@ -44,6 +74,11 @@ def require_scope(scope: str) -> Callable[[F], F]:
     Matches already-expanded scopes only; never role names. Sets
     ``__required_scope__`` on the handler so route audits can introspect it.
     """
+
+    if not _is_valid_scope(scope):
+        raise ValueError(
+            f"malformed required scope: {scope!r} (want 'resource:action')"
+        )
 
     def decorator(fn: F) -> F:
         if not inspect.iscoroutinefunction(fn):
@@ -70,13 +105,31 @@ def require_scope(scope: str) -> Callable[[F], F]:
 
 
 async def tenant_path_guard() -> None:
-    """before_request hook: reject when the path tenant_id differs from the token tenant."""
+    """before_request hook: enforce that the path tenant equals the token tenant.
+
+    Fail-closed: a matched route that declares a tenant-looking arg under an
+    unrecognized spelling (e.g. ``<tenantId>``, or whatever follows ``/tenants/``) is
+    DENIED rather than silently skipped. Recognized spellings: tenant_id, tid, tenant.
+    Values are compared as str so converters like ``<uuid:tenant_id>`` still match.
+    Routes with no tenant arg at all (tenant comes from the token) are not gated here.
+    """
+    rule = request.url_rule.rule if request.url_rule is not None else ""
+    declared = set(_RULE_ARG.findall(rule))
+    suspicious = {m for m in _TENANTS_SEGMENT.findall(rule)} | {
+        a for a in declared if "tenant" in a.lower()
+    }
+    unrecognized = suspicious - _TENANT_ARGS
     view_args = request.view_args or {}
-    path_tenant = view_args.get("tenant_id")
-    if path_tenant is None:
+    present = {k: v for k, v in view_args.items() if k in _TENANT_ARGS}
+    if unrecognized:
+        metrics.auth_denied("tenant_arg_unrecognized")
+        log.warning("tenant_arg_unrecognized", rule=rule)
+        raise ProblemError(403, "nest.auth.tenant_mismatch", "tenant mismatch")
+    if not present:
         return
     principal = current_principal()
-    if path_tenant != principal.tenant:
-        metrics.auth_denied("tenant_mismatch")
-        log.info("tenant_mismatch", tenant=principal.tenant)
-        raise ProblemError(403, "nest.auth.tenant_mismatch", "tenant mismatch")
+    for value in present.values():
+        if str(value) != str(principal.tenant):
+            metrics.auth_denied("tenant_mismatch")
+            log.info("tenant_mismatch", tenant=principal.tenant)
+            raise ProblemError(403, "nest.auth.tenant_mismatch", "tenant mismatch")

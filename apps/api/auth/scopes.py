@@ -7,12 +7,15 @@ This module matches scopes only and never inspects role names.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from types import MappingProxyType
 
-LEGACY_SCOPE_ALIASES: Mapping[str, frozenset[str]] = {
-    "dataresources:read": frozenset({"nest:dataresource:read"}),
-    "dataresources:write": frozenset({"nest:dataresource:write"}),
-    "dataresources:admin": frozenset({"nest:dataresource:delete"}),
-}
+LEGACY_SCOPE_ALIASES: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "dataresources:read": frozenset({"nest:dataresource:read"}),
+        "dataresources:write": frozenset({"nest:dataresource:write"}),
+        "dataresources:admin": frozenset({"nest:dataresource:delete"}),
+    }
+)
 
 _LEGACY_SUPER_GRANT = "nest:*:admin"
 # Actions the literal "admin" action covers. "delete" is deliberately absent: DELETE
