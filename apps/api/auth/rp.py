@@ -23,7 +23,7 @@ REQUIRED_CLAIMS: tuple[str, ...] = ("exp", "iat", "iss", "aud", "sub")
 TIER_CLAIM = "https://nest.penguintech.io/tier"
 DEFAULT_TIER = "free"
 # A resource server never performs a code exchange, so it holds no client secret.
-_NO_CLIENT_SECRET = ""
+_NO_CLIENT_CREDENTIAL = ""
 
 
 class HardenedRP(OIDCRelyingParty):
@@ -50,7 +50,7 @@ class HardenedRP(OIDCRelyingParty):
         config = OIDCRPConfig(
             issuer_url=issuer,
             client_id=audience,
-            client_secret=_NO_CLIENT_SECRET,
+            client_secret=_NO_CLIENT_CREDENTIAL,
             redirect_url=issuer,
             algorithms=list(ALLOWED_ALGORITHMS),
         )
