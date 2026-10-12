@@ -371,7 +371,6 @@ jobs:
 
     - name: Build applications
       run: |
-        go build -o bin/api ./apps/api
         npm run build
 
     - name: Start test environment

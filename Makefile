@@ -172,7 +172,6 @@ build: ## Build - Build all applications
 build-go: ## Build - Build Go applications
 	@echo "$(BLUE)Building Go applications...$(RESET)"
 	@mkdir -p bin
-	@go build -ldflags "-X main.version=$(VERSION)" -o bin/api ./apps/api
 
 build-python: ## Build - Build Python applications
 	@echo "$(BLUE)Building Python applications...$(RESET)"
@@ -185,7 +184,6 @@ build-node: ## Build - Build Node.js applications
 
 build-production: ## Build - Build for production with optimizations
 	@echo "$(BLUE)Building for production...$(RESET)"
-	@CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-w -s -X main.version=$(VERSION)" -o bin/api ./apps/api
 	@cd web && npm run build
 
 # Docker Commands
