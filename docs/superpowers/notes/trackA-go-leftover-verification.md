@@ -31,3 +31,18 @@ Hub-api owns `users` per the PII boundary, but a user/team management API is NOT
 
 - No `package main` and no `ListenAndServe`/router wiring in any `apps/api/*.go` file; the `apps/api/Dockerfile` entrypoint is `python3 apps/api/main.py`.
 - Constructors (`NewResourceController`, `NewAuthController`, `NewTeamsController`, `NewRBACMiddleware`, `AuthMiddleware`) are referenced only inside the deleted files.
+
+## Task 2: penguin-libs package probe (2026-10-12)
+
+`scripts/probe-penguin-libs.sh` against the default index (examined=6):
+
+| Package            | Result      | Action                                                                                                                |
+| ------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------- |
+| penguin-aaa        | FOUND 0.2.1 | pinned, no adapter                                                                                                    |
+| penguin-limiter    | FOUND 0.1.0 | pinned, no adapter (library exposes TokenBucket/FixedWindow/SlidingWindow/MemoryStorage, no async `allow()` Protocol) |
+| penguin-utils      | FOUND 0.3.0 | pinned, no adapter                                                                                                    |
+| penguin-http       | MISSING     | `apps/api/adapters/http.py` (aiohttp)                                                                                 |
+| penguin-validation | MISSING     | `apps/api/adapters/validation.py`                                                                                     |
+| penguin-pydantic   | MISSING     | not needed yet; no adapter                                                                                            |
+
+Security pins added to clear pre-existing pip-audit findings: PyJWT 2.15.0, urllib3 2.8.0, werkzeug 3.1.9, multidict 6.9.1, oauthlib 4.0.0 (audit: 95 deps examined, 0 vulns).
