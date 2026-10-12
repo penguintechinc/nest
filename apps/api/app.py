@@ -129,7 +129,7 @@ def create_app(
 
     @app.after_request
     async def after_request(response):
-        """Record metrics, log request end, and attach rate-limit headers."""
+        """Record metrics and log request end."""
         method = request.method
         path = request.path or "/"
         status = response.status_code or 200
@@ -149,11 +149,6 @@ def create_app(
                 "request_id": getattr(g, "request_id", None),
             },
         )
-
-        if hasattr(g, "rl_limit"):
-            response.headers["X-RateLimit-Limit"] = str(g.rl_limit)
-            response.headers["X-RateLimit-Remaining"] = str(g.rl_remaining)
-            response.headers["X-RateLimit-Reset"] = str(g.rl_reset)
 
         return response
 

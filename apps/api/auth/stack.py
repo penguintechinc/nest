@@ -1,7 +1,8 @@
 """ASGI auth stack for the hub API: CORS preflight, penguin-aaa OIDC + tenant, claims bridge.
 
-Order, outermost to innermost: OTel (Task 7 hook, none yet) -> RateLimit (Task 9 hook) ->
-CORS preflight -> public-path bypass | OIDCAuthMiddleware -> TenantMiddleware -> Quart.
+Order, outermost to innermost: per-request state isolation -> OTel (Task 7 hook, none yet) ->
+RateLimit (Task 9 hook) -> CORS preflight -> public-path bypass | OIDCAuthMiddleware ->
+TenantMiddleware -> Quart.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import Any, cast
 
 from adapters.limiter import RateLimiter
 from auth.authz import Principal
+from auth.rp import IDP_OUTAGE
 from dto.problem import ProblemError
 from penguin_aaa.middleware.asgi import OIDCAuthMiddleware
 from penguin_aaa.middleware.tenant import TenantMiddleware
@@ -39,6 +41,65 @@ def cors_origins_from_env() -> frozenset[str]:
     if "*" in origins:
         raise ValueError(f"{CORS_ENV} must list explicit origins, never '*'")
     return origins
+
+
+class RequestStateIsolation:
+    """Give every request its own ``scope["state"]`` dict before anything writes claims.
+
+    ASGI servers (hypercorn) copy lifespan ``state`` per CONNECTION, so HTTP/2 streams that
+    multiplex on one connection would otherwise share one dict and a claims write for tenant B
+    could be observed by tenant A's request. This must be the OUTERMOST layer.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        """Wrap ``app``."""
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Replace the shared state with a private shallow copy for http/websocket scopes."""
+        if scope["type"] in ("http", "websocket"):
+            scope = {**scope, "state": dict(scope.get("state") or {})}
+        await self._app(scope, receive, send)
+
+
+_OUTAGE_BODY = b'{"error": "Identity provider unavailable"}'
+
+
+class IdpOutageAwareOIDC(OIDCAuthMiddleware):
+    """OIDCAuthMiddleware that answers 503 (+Retry-After) when the IdP is down, not 401.
+
+    The stock middleware turns every verification exception into 401, which would tell clients
+    their (valid) credentials are bad during an IdP outage. ``AsgiClaimsAdapter`` flags the
+    outage via a context variable; this layer rewrites that one 401 response.
+    """
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Delegate, rewriting the middleware's own 401 to 503 when the outage flag is set."""
+        IDP_OUTAGE.set(False)
+        rewriting = False
+
+        async def send_mapped(message: dict[str, Any]) -> None:
+            nonlocal rewriting
+            if (
+                message["type"] == "http.response.start"
+                and message.get("status") == 401
+                and IDP_OUTAGE.get()
+            ):
+                rewriting = True
+                message = {
+                    "type": "http.response.start",
+                    "status": 503,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"content-length", str(len(_OUTAGE_BODY)).encode()),
+                        (b"retry-after", b"5"),
+                    ],
+                }
+            elif rewriting and message["type"] == "http.response.body":
+                message = {"type": "http.response.body", "body": _OUTAGE_BODY}
+            await send(message)
+
+        await super().__call__(scope, receive, send_mapped)
 
 
 def _header(scope: Scope, name: bytes) -> bytes:
@@ -157,9 +218,10 @@ def build_asgi_stack(
         # Fail loud: the rate-limit layer lands in Task 9; never silently ignore a limiter.
         raise NotImplementedError("rate limiting ASGI layer is implemented in Task 9")
     quart_app = cast(ASGIApp, app.asgi_app)
-    authed = OIDCAuthMiddleware(
+    authed = IdpOutageAwareOIDC(
         TenantMiddleware(quart_app, required=True), rp, public_paths=set(public_paths)
     )
     stack: ASGIApp = PublicPathBypass(quart_app, authed, public_paths)
     stack = CorsMiddleware(stack, cors_origins_from_env())
+    stack = RequestStateIsolation(stack)
     app.asgi_app = stack  # type: ignore[method-assign,assignment]  # documented Quart middleware hook

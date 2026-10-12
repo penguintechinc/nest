@@ -37,9 +37,11 @@ def setup_oidc_env() -> None:
     os.environ["OIDC_AUDIENCE"] = "nest-api"
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(autouse=True)
 def patch_jwks_resolution():  # type: ignore[no-untyped-def]
     """Point the hardened RP's key resolution at the test keypair for all tests.
+
+    Function-scoped so tests/jwks can override this fixture and exercise the REAL fetch path.
 
     Only key *fetching* is faked; signature/alg/iss/aud/exp/nbf validation runs for real.
     """

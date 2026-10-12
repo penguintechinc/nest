@@ -29,7 +29,7 @@ def _bearer(token: str, **extra: str) -> dict[str, str]:
 async def test_asgi_stack_is_installed_on_the_app() -> None:
     """Quart.__call__ must route through the wrapped asgi_app, or none of this is tested."""
     app = create_app()
-    assert type(app.asgi_app).__name__ == "CorsMiddleware"
+    assert type(app.asgi_app).__name__ == "RequestStateIsolation"
     assert app.asgi_app is not Quart.asgi_app.__get__(app)
 
 
