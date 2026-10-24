@@ -11,7 +11,7 @@ PROJECT_NAME := nest
 VERSION := $(shell cat .version 2>/dev/null || echo "development")
 DOCKER_REGISTRY := ghcr.io
 DOCKER_ORG := penguintechinc
-GO_VERSION := 1.24.2
+GO_VERSION := 1.26.10
 PYTHON_VERSION := 3.13
 NODE_VERSION := 24
 
