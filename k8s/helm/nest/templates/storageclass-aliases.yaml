@@ -1,0 +1,17 @@
+{{- if .Values.storageClassAliases.enabled }}
+{{- /* Alias StorageClasses read by the controller (pvc/block, pvc/file, filesystem), backed by local-path. reclaimPolicy defaults to Delete so helm uninstall does not leak PVs; Retain lives only in the out-of-band nest-local-retain class. */}}
+{{- range $name := .Values.storageClassAliases.names }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: nest
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+provisioner: {{ $.Values.storageClassAliases.provisioner }}
+reclaimPolicy: {{ $.Values.storageClassAliases.reclaimPolicy }}
+volumeBindingMode: WaitForFirstConsumer
+{{- end }}
+{{- end }}

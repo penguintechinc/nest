@@ -1,0 +1,13 @@
+# nest-local-retain: alpha demo data must survive redeploys.
+# reclaimPolicy Retain keeps PVs when PVCs are deleted; those PVs go Released
+# and need claimRef cleared (or manual removal) before reuse.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nest-local-retain
+  labels:
+    app.kubernetes.io/part-of: nest
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false

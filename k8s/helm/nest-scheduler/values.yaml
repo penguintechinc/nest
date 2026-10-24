@@ -21,12 +21,11 @@ resources:
     cpu: 1000m
     memory: 1Gi
 
+# NOTE: the scheduler has no leader election yet - keep replicaCount 1.
 env:
   GIN_MODE: release
   PORT: "8080"
   LOG_LEVEL: warn
-  LEADER_ELECTION_ENABLED: "true"
-  LEADER_ELECTION_NAMESPACE: "nest"
 
 probes:
   liveness:

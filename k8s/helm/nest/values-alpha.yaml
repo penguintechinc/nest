@@ -1,11 +1,25 @@
-# Alpha environment - local development (MicroK8s)
-# Reduced resources, debug logging, local registry images
+# Alpha environment - dal2alpha demo profile ("Option A"): api+controller+scheduler+valkey+
+# CNPG (operator + example Cluster) + netpols; pvc/block + pvc/file on local-path.
+# Disabled: csi/nodeAgent/nfs/iscsi (privileged, violate PSA restricted; node-agent is a
+# separate release in nest-system), cephCluster/velero/observability (CRDs absent on dal2alpha).
+# Nest CRDs ship from this chart's crds/ dir; CNPG CRDs ship in the cloudnative-pg subchart. Requires namespace `nest` with
+# label gateway-access=shared-dal2a. Image tags: ghcr has beta-*/gamma-* only (no latest) - pass
+# --set nest-<svc>.image.tag=... explicitly.
+# NOTE: subcharts are keyed by chart name (nest-api, ...), not api/controller; only *.enabled keep the short keys.
 
 api:
   enabled: true
-  image:
-    repository: localhost:32000/nest-api
-    tag: latest
+nest-api:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault   # PSA restricted requires explicit seccomp
+  httpRoute:
+    enabled: true
+    parentRef:
+      name: shared
+      namespace: gateway-system
+      sectionName: https
+    hostnames: ["nest.dal2a.penguintech.cloud"]   # .cloud assumed (waddlebot pattern + gateway wildcard)
   env:
     GIN_MODE: debug
     LOG_LEVEL: debug
@@ -16,12 +30,12 @@ api:
     limits:
       cpu: 250m
       memory: 256Mi
-
 controller:
   enabled: true
-  image:
-    repository: localhost:32000/nest-controller
-    tag: latest
+nest-controller:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault   # PSA restricted requires explicit seccomp
   env:
     LOG_LEVEL: debug
   resources:
@@ -31,27 +45,14 @@ controller:
     limits:
       cpu: 250m
       memory: 256Mi
-
 csi:
-  enabled: true
-  image:
-    repository: localhost:32000/nest-csi
-    tag: latest
-
+  enabled: false
 scheduler:
   enabled: true
-  image:
-    repository: localhost:32000/nest-scheduler
-    tag: latest
-
 nodeAgent:
-  enabled: true
-  image:
-    repository: localhost:32000/nest-node-agent
-    tag: latest
-
+  enabled: false
 observability:
-  enabled: true
+  enabled: false
   prometheus:
     storageSize: 5Gi
     scrapeInterval: 60s
@@ -68,10 +69,8 @@ observability:
       ratio: 1.0
 
 nfsGateway:
-  enabled: true
-  image:
-    repository: localhost:32000/nest-nfs-gateway
-    tag: latest
+  enabled: false
+nest-nfs-gateway:
   env:
     GIN_MODE: debug
     LOG_LEVEL: debug
@@ -82,12 +81,9 @@ nfsGateway:
     limits:
       cpu: 250m
       memory: 128Mi
-
 iscsiGateway:
-  enabled: true
-  image:
-    repository: localhost:32000/nest-iscsi-gateway
-    tag: latest
+  enabled: false
+nest-iscsi-gateway:
   env:
     GIN_MODE: debug
     LOG_LEVEL: debug
@@ -98,9 +94,24 @@ iscsiGateway:
     limits:
       cpu: 250m
       memory: 128Mi
-
 rgw:
   enabled: false
+cephCluster:
+  enabled: false   # no rook-ceph CRDs on dal2alpha
+velero:
+  enabled: false   # no velero CRDs on dal2alpha
+cloudnativepg:
+  enabled: true    # operator subchart ships its own CRDs (installed from its crds/ dir)
+
+# Shared gateway namespace on dal2alpha + Cilium allow for kube-apiserver -> CNPG webhook (9443)
+nest-network-policies:
+  ingressNamespace: gateway-system
+  cnpgWebhook:
+    enabled: true
+
+# Alias StorageClasses the controller defaults to (nest-block/nest-fs-rwo/nest-fs) -> local-path
+storageClassAliases:
+  enabled: true
 
 # Alpha-tier overrides for the new parity subcharts (aliased by subchart name)
 nest-ceph-cluster:
@@ -125,9 +136,13 @@ nest-velero:
     enabled: false
 
 nest-valkey:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault   # PSA restricted requires explicit seccomp
   replicaCount: 1
   storage:
     size: 512Mi
+    storageClass: nest-local-retain
   resources:
     requests:
       cpu: 100m
@@ -136,10 +151,28 @@ nest-valkey:
       cpu: 500m
       memory: 512Mi
 
+# CNPG webhooks are cluster-wide (subchart exposes no namespaceSelector): Ignore so a down
+# operator cannot block postgresql.cnpg.io CR writes in other namespaces on the shared cluster.
 nest-cloudnativepg:
+  cloudnative-pg:
+    webhook:
+      mutating:
+        failurePolicy: Ignore
+      validating:
+        failurePolicy: Ignore
   exampleCluster:
     instances: 1
     storage:
       size: 1Gi
+      storageClass: nest-local-retain
     backup:
       enabled: false
+
+# Gateway API exposure via the shared dal2alpha gateway (listener https/443,
+# cert cloudflare-origin-wildcard; namespace must carry label gateway-access=shared-dal2a)
+
+nest-scheduler:
+  replicaCount: 1   # no leader election yet - never run >1
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault   # PSA restricted requires explicit seccomp

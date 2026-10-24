@@ -81,3 +81,15 @@ cloudnativepg:
 
 networkPolicies:
   enabled: true
+
+# Alias StorageClasses (alpha only; off by default). No default-class annotation.
+storageClassAliases:
+  enabled: false
+  provisioner: rancher.io/local-path
+  # Delete: chart-managed aliases must not leak PVs (/opt/local-path-provisioner) after helm uninstall.
+  # Durable data uses nest-local-retain (out-of-band, k8s/dal2alpha/).
+  reclaimPolicy: Delete
+  names:
+    - nest-block
+    - nest-fs-rwo
+    - nest-fs

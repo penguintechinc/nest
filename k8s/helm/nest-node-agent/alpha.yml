@@ -1,0 +1,20 @@
+# nest-node-agent alpha (dal2alpha) values. Separate helm release in namespace nest-system
+# (needs privileged PSA; the `nest` namespace is PSA restricted). Two-step install, run from
+# k8s/helm (namespace is NOT created by the chart):
+#   1) kubectl create namespace nest-system && kubectl label namespace nest-system pod-security.kubernetes.io/enforce=privileged
+#   2) helm install nest-node-agent ./nest-node-agent -n nest-system -f ./nest-node-agent/alpha.yml --set image.tag=<tag>
+image:
+  repository: ghcr.io/penguintechinc/nest/nest-node-agent
+  tag: ""   # REQUIRED: pass --set image.tag=beta-<epoch>
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+env:
+  LOG_LEVEL: debug

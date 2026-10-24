@@ -14,6 +14,8 @@ repos:
         args: [--maxkb=1024]
       - id: check-yaml
         args: [--allow-multiple-documents]
+        # Helm templates are Go templates, not YAML — gated by the helm-lint hook below instead.
+        exclude: ^k8s/helm/[^/]+/templates/
       - id: check-json
       - id: check-executables-have-shebangs
       - id: detect-private-key
@@ -79,6 +81,12 @@ repos:
         language: system
         files: \.(js|jsx|ts|tsx|json|css|md)$
         exclude: ^(.*/)?node_modules/
+      - id: helm-lint
+        name: helm lint (all charts)
+        entry: scripts/helm-lint.sh
+        language: script
+        pass_filenames: false
+        files: ^k8s/helm/
 
   # ── Security (pre-push — heavier, keeps commits fast) ──────────────────────
   - repo: https://github.com/PyCQA/bandit
