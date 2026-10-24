@@ -52,10 +52,17 @@ repos:
       - id: actionlint
 
   # ── Go ─────────────────────────────────────────────────────────────────────
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.62.2
+  # Local docker hook: the upstream `language: golang` hook builds with the host
+  # go (1.25), which cannot load a go1.26 module. Image pinned by digest (v2.15.0, built go1.27.0).
+  - repo: local
     hooks:
       - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'docker run --rm --user 1000:1000 -e HOME=/tmp -e GOCACHE=/tmp/gocache -e GOMODCACHE=/tmp/gomod -e GOLANGCI_LINT_CACHE=/tmp/glcache -v "$(git rev-parse --git-common-dir)/..:$(git rev-parse --git-common-dir)/.." -v "$PWD:$PWD" -w "$PWD" golangci/golangci-lint@sha256:fbfcfd12a6f8d7f1b97b3362ca80fc2a244d46863148c73cb88e7793af96c481 golangci-lint run --new-from-rev HEAD'
+        language: system
+        types: [go]
+        require_serial: true
+        pass_filenames: false
 
   # ── Node / TypeScript ────────────────────────────────────────────────────────
   - repo: local
