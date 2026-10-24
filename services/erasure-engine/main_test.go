@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,6 +10,9 @@ import (
 )
 
 func TestRun(t *testing.T) {
+	// regression: test-hygiene erasure.db pollution
+	t.Setenv("DB_TYPE", "sqlite")
+	t.Setenv("DB_NAME", filepath.Join(t.TempDir(), "erasure.db"))
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 
@@ -40,6 +44,9 @@ func TestRun(t *testing.T) {
 }
 
 func TestRunDefaultAddr(t *testing.T) {
+	// regression: test-hygiene erasure.db pollution
+	t.Setenv("DB_TYPE", "sqlite")
+	t.Setenv("DB_NAME", filepath.Join(t.TempDir(), "erasure.db"))
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 
