@@ -100,9 +100,9 @@ repos:
         stages: [pre-push]
 
       - id: govulncheck
-        name: govulncheck (root module)
-        entry: bash -c 'go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...'
-        language: system
+        name: govulncheck (root, db-proxy, k8s-controller; docker)
+        entry: scripts/hooks/govulncheck-docker.sh
+        language: script
         pass_filenames: false
         files: \.go$
         stages: [pre-push]
