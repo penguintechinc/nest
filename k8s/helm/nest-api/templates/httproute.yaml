@@ -18,9 +18,11 @@ spec:
   {{- end }}
   rules:
     - matches:
+        {{- range .Values.httpRoute.pathPrefixes }}
         - path:
             type: PathPrefix
-            value: {{ .Values.httpRoute.pathPrefix | quote }}
+            value: {{ . | quote }}
+        {{- end }}
       backendRefs:
         - name: {{ include "nest-api.fullname" . }}
           port: {{ .Values.service.port }}

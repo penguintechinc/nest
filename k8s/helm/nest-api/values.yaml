@@ -69,4 +69,7 @@ httpRoute:
     namespace: ""     # Gateway namespace (set per environment)
     sectionName: ""   # optional listener name
   hostnames: []       # e.g. ["nest.<domain>"]; empty = match all hostnames on the listener
-  pathPrefix: /
+  # Only these path prefixes are published via the gateway (Gateway API PathPrefix matches on
+  # path-element boundaries). Never add "/" - /metrics, /health, /ready are unauthenticated.
+  pathPrefixes:
+    - /api/v1

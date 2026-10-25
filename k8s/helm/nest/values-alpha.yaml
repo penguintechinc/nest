@@ -19,7 +19,7 @@ nest-api:
       name: shared
       namespace: gateway-system
       sectionName: https
-    hostnames: ["nest.dal2a.penguintech.cloud"]   # .cloud assumed (waddlebot pattern + gateway wildcard)
+    hostnames: ["nest-alpha.penguintech.cloud"]   # user-specified alpha domain, served on :8443 (needs a gateway listener on 8443)
   env:
     GIN_MODE: debug
     LOG_LEVEL: debug
