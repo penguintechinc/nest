@@ -5,8 +5,11 @@
 set -euo pipefail
 
 IMAGE='golang:1.26.10-bookworm@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af'
-CACHE="${GOVULN_CACHE_DIR:-/tmp/nest-govulncheck-cache}"
-mkdir -p "$CACHE"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/hooks/lib-cache.sh
+. "$HERE/lib-cache.sh"
+CACHE="${GOVULN_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nest-govulncheck}"
+secure_cache_dir "$CACHE"
 ROOT="$(git rev-parse --show-toplevel)"
 
 # shellcheck disable=SC2016  # expanded inside the container
@@ -21,8 +24,8 @@ for mod in . services/db-proxy services/k8s-controller; do
 done
 exit $rc'
 
-docker run --rm --user 1000:1000 \
+docker run --rm --user "$(id -u):$(id -g)" \
   -e HOME=/tmp/home -e GOPATH=/tmp/cache/gopath -e GOCACHE=/tmp/cache/gocache \
-  -e GOFLAGS=-buildvcs=false -e GOTOOLCHAIN=local -e ROOT="$ROOT" \
-  -v "$CACHE:/tmp/cache" -v "$ROOT:$ROOT" -w "$ROOT" \
+  -e GOFLAGS="-buildvcs=false -mod=readonly" -e GOTOOLCHAIN=local -e ROOT="$ROOT" \
+  -v "$CACHE:/tmp/cache" -v "$ROOT:$ROOT:ro" -w "$ROOT" \
   "$IMAGE" bash -c "mkdir -p /tmp/home; $INNER"
