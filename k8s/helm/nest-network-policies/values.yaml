@@ -4,3 +4,9 @@ kubeSystemNamespace: kube-system
 # Namespace of the shared Gateway API Gateway that fronts nest-api (see
 # k8s/kustomize/base/httproute.yaml, parentRefs.namespace).
 ingressNamespace: gateway
+# Additive CiliumNetworkPolicy (requires cilium.io CRDs): lets the kube-apiserver reach the CNPG
+# operator webhook (pod port 9443; Service 443) which default-deny otherwise blocks.
+cnpgWebhook:
+  enabled: false
+  podName: cloudnative-pg
+  port: 9443

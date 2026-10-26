@@ -214,7 +214,7 @@ nest-controller:
       memory: 256Mi
   env:
     LOG_LEVEL: info
-    LEADER_ELECTION_ENABLED: "true"
+    LEADER_ELECT_ENABLED: "true"
     LEADER_ELECTION_NAMESPACE: nest
   probes:
     liveness:

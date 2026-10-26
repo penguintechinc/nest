@@ -1,7 +1,7 @@
 # Project Template Makefile
 # This Makefile provides common development tasks for multi-language projects
 
-.PHONY: help setup dev test build clean lint format docker deploy test-k8s
+.PHONY: sync-nest-crds check-nest-crds help setup dev test build clean lint format docker deploy test-k8s
 
 # Default target
 .DEFAULT_GOAL := help
@@ -415,3 +415,15 @@ info: ## Info - Show project information
 env: ## Info - Show environment variables
 	@echo "$(BLUE)Environment Variables:$(RESET)"
 	@env | grep -E "^(LICENSE_|POSTGRES_|REDIS_|NODE_|GIN_|PY4WEB_)" | sort
+
+sync-nest-crds: ## K8s - Copy Nest CRDs from kustomize base into the nest Helm chart crds/
+	@scripts/sync-nest-crds.sh sync
+
+check-nest-crds: ## K8s - Fail if the nest Helm chart crds/ drifted from kustomize base
+	@scripts/sync-nest-crds.sh check
+
+bootstrap-dal2alpha: ## K8s - dal2alpha out-of-band bootstrap (needs KUBE_CONTEXT=dal2alpha; dry-run unless ARGS=--apply)
+	@scripts/bootstrap-dal2alpha.sh $(ARGS)
+
+helm-deps-alpha: ## K8s - helm dependency update + alpha render sanity (CNPG operator present)
+	@scripts/helm-deps-alpha.sh
