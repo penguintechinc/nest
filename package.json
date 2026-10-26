@@ -28,14 +28,14 @@
     "version:update": "./scripts/version/update-version.sh"
   },
   "dependencies": {
-    "axios": "1.18.1",
+    "axios": "1.20.0",
     "bcryptjs": "2.4.3",
-    "compression": "1.8.1",
+    "compression": "1.8.2",
     "cors": "2.8.5",
     "dotenv": "16.4.5",
     "express": "4.22.2",
     "helmet": "7.1.0",
-    "joi": "17.13.4",
+    "joi": "17.13.7",
     "jsonwebtoken": "9.0.2",
     "morgan": "1.11.0",
     "pg": "8.12.0",
@@ -82,7 +82,10 @@
     "url": "https://github.com/penguintechinc/project-template/issues"
   },
   "overrides": {
-    "body-parser": "1.20.6",
+    "body-parser": "1.20.9",
+    "proxy-addr": "2.0.8",
+    "follow-redirects": "1.16.1",
+    "brace-expansion": "1.1.21",
     "path-to-regexp": "0.1.13",
     "jws": "3.2.3"
   }
