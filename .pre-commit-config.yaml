@@ -52,10 +52,17 @@ repos:
       - id: actionlint
 
   # ── Go ─────────────────────────────────────────────────────────────────────
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.62.2
+  # Local docker hook: the upstream `language: golang` hook builds with the host
+  # go (1.25), which cannot load a go1.26 module. Image pinned by digest (v2.15.0, built go1.27.0).
+  - repo: local
     hooks:
       - id: golangci-lint
+        name: golangci-lint
+        entry: scripts/hooks/golangci-lint-docker.sh
+        language: system
+        types: [go]
+        require_serial: true
+        pass_filenames: false
 
   # ── Node / TypeScript ────────────────────────────────────────────────────────
   - repo: local
@@ -93,9 +100,9 @@ repos:
         stages: [pre-push]
 
       - id: govulncheck
-        name: govulncheck (root module)
-        entry: bash -c 'go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...'
-        language: system
+        name: govulncheck (root, db-proxy, k8s-controller; docker)
+        entry: scripts/hooks/govulncheck-docker.sh
+        language: script
         pass_filenames: false
         files: \.go$
         stages: [pre-push]

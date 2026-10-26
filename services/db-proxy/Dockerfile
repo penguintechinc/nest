@@ -11,7 +11,7 @@
 ARG XDP_BUILD_TAGS=xdp
 
 # Stage 1: Builder
-FROM golang:1.25-bookworm@sha256:298734aec230b5f3e8cee450ce6d7eccc39f1797ba548ee90d57e9803030c6c3 AS builder
+FROM golang:1.26.10-bookworm@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af AS builder
 
 WORKDIR /build
 
@@ -42,7 +42,7 @@ WORKDIR /app
 COPY --from=builder /build/app .
 
 # Rootless
-USER dbproxy
+USER 1000
 
 # Native-binary healthcheck (no curl/wget in the slim image): the `healthcheck`
 # subcommand GETs the local /healthz on the metrics port and exits 0/1.

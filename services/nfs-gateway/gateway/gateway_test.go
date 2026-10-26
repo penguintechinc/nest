@@ -275,6 +275,9 @@ func TestListExportsNoTenantFilter(t *testing.T) {
 }
 
 func TestCreateExportConfigWriteFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can create the path; file-permission failure cannot be simulated")
+	}
 	gin.SetMode(gin.TestMode)
 	fakeReloader := gateway.NewFakeGaneshaReloader()
 	gw := gateway.New(gateway.Config{
