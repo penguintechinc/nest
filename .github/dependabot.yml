@@ -1,0 +1,103 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/pkg/sdk/rust"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "docker"
+    directories:
+      - "/app-skeleton"
+      - "/apps/api"
+      - "/apps/manager"
+      - "/services/csi"
+      - "/services/db-proxy"
+      - "/services/gateway"
+      - "/services/iscsi-gateway"
+      - "/services/k8s-controller"
+      - "/services/nfs-gateway"
+      - "/services/node-agent"
+      - "/services/scheduler"
+      - "/web"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "gomod"
+    directories:
+      - "/"
+      - "/services/db-proxy"
+      - "/services/k8s-controller"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+      - "/pkg/sdk/typescript"
+      - "/shared/node_libs"
+      - "/web"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "pip"
+    directories:
+      - "/"
+      - "/apps/api"
+      - "/apps/manager"
+      - "/pkg/pulumi-provider-nest"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
