@@ -14,150 +14,19 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: "docker"
-    directory: "/app-skeleton"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/apps/api"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/apps/manager"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/csi"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/db-proxy"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/gateway"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/iscsi-gateway"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/k8s-controller"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/nfs-gateway"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/node-agent"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/services/scheduler"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/web"
+    directories:
+      - "/app-skeleton"
+      - "/apps/api"
+      - "/apps/manager"
+      - "/services/csi"
+      - "/services/db-proxy"
+      - "/services/gateway"
+      - "/services/iscsi-gateway"
+      - "/services/k8s-controller"
+      - "/services/nfs-gateway"
+      - "/services/node-agent"
+      - "/services/scheduler"
+      - "/web"
     schedule:
       interval: "weekly"
     groups:
@@ -183,33 +52,10 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: "gomod"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "gomod"
-    directory: "/services/db-proxy"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "gomod"
-    directory: "/services/k8s-controller"
+    directories:
+      - "/"
+      - "/services/db-proxy"
+      - "/services/k8s-controller"
     schedule:
       interval: "weekly"
     groups:
@@ -222,46 +68,11 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "npm"
-    directory: "/pkg/sdk/typescript"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "npm"
-    directory: "/shared/node_libs"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "npm"
-    directory: "/web"
+    directories:
+      - "/"
+      - "/pkg/sdk/typescript"
+      - "/shared/node_libs"
+      - "/web"
     schedule:
       interval: "weekly"
     groups:
@@ -274,46 +85,11 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "pip"
-    directory: "/apps/api"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "pip"
-    directory: "/apps/manager"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-dependencies:
-        applies-to: version-updates
-        patterns:
-          - "*"
-      security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "pip"
-    directory: "/pkg/pulumi-provider-nest"
+    directories:
+      - "/"
+      - "/apps/api"
+      - "/apps/manager"
+      - "/pkg/pulumi-provider-nest"
     schedule:
       interval: "weekly"
     groups:
